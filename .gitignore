@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist/
+build/
+
+# Environment variables (DO NOT COMMIT)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Testing
+.nyc_output/
+coverage/
+
+# Temporary files
+*.zip
+*.tar.gz
+tmp/
+temp/
+
+# Logs
+logs/
+*.log
+
+# Optional npm cache
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Uploads folder (can be added based on your needs)
+public/uploads/
