@@ -2,22 +2,34 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Course, CourseDocument } from './schemas/course.schema';
+import { CoursePlan, CoursePlanDocument } from '../organizations/schemas/course-plan.schema';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 
 @Injectable()
 export class CoursesService {
-  constructor(@InjectModel(Course.name) private courseModel: Model<CourseDocument>) {}
+  constructor(
+    @InjectModel(Course.name) private courseModel: Model<CourseDocument>,
+    @InjectModel(CoursePlan.name) private coursePlanModel: Model<CoursePlanDocument>
+  ) {}
 
-  async createCourse(organizationId: string, instructorId: string, courseData: any) {
+  async createCourse(organizationId: string, creatorId: string, courseData: any) {
     const slug = this.generateCourseSlug(courseData?.title);
+
+    let validityDays = courseData.validityDays || 0;
+    if (courseData.coursePlanId) {
+      const plan = await this.coursePlanModel.findById(courseData.coursePlanId);
+      if (!plan) throw new NotFoundException('Course plan not found');
+      validityDays = plan.validityDays;
+    }
 
     const course = new this.courseModel({
       ...courseData,
       slug,
+      validityDays,
       organizationId,
-      instructorId,
-      createdBy: instructorId,
+      instructorIds: courseData.instructorIds && courseData.instructorIds.length > 0 ? courseData.instructorIds : [creatorId],
+      createdBy: creatorId,
     });
     return course.save();
   }
@@ -31,12 +43,15 @@ export class CoursesService {
       .replace(/(^-|-$)/g, '');
   }
 
-  async getCourses(organizationId: string, queryDto: PaginationQueryDto, status?: string, userType?: string) {
+  async getCourses(organizationId: string, queryDto: PaginationQueryDto, status?: string, userType?: string, userId?: string) {
     const { page = 1, limit = 10, search } = queryDto;
     const query: any = { organizationId, isDeleted: false };
     
     if (userType === 'STUDENT') {
       query.status = 'PUBLISHED';
+    } else if (userType === 'FACULTY' && userId) {
+      query.instructorIds = { $in: [userId] };
+      if (status) query.status = status;
     } else if (status) {
       query.status = status;
     }
@@ -48,7 +63,12 @@ export class CoursesService {
     const skip = (page - 1) * limit;
 
     const [data, totalItems] = await Promise.all([
-      this.courseModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      this.courseModel.find(query)
+        .populate('instructorIds', 'fullName email')
+        .populate('regionalPrices.regionId', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       this.courseModel.countDocuments(query),
     ]);
 
@@ -61,7 +81,10 @@ export class CoursesService {
       query.status = 'PUBLISHED';
     }
 
-    const course = await this.courseModel.findOne(query);
+    const course = await this.courseModel
+      .findOne(query)
+      .populate('instructorIds', 'fullName email')
+      .populate('regionalPrices.regionId', 'name');
     if (!course) throw new NotFoundException('Course not found');
     return course;
   }

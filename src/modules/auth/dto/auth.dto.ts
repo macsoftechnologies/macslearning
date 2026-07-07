@@ -62,4 +62,8 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   mobile?: string;
+
+  @IsString()
+  @IsOptional()
+  regionId?: string;
 }

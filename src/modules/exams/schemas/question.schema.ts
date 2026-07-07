@@ -23,6 +23,9 @@ export class Question {
   @Prop({ type: [{ text: String, isCorrect: Boolean }] })
   options: { text: string; isCorrect: boolean }[];
 
+  @Prop()
+  correctAnswer: string;
+
   @Prop({ required: true })
   marks: number;
 

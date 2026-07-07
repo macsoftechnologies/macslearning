@@ -8,10 +8,12 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from '../../common/strategies/jwt.strategy';
 import { Organization, OrganizationSchema } from '../organizations/schemas/org.schema';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     UsersModule,
+    NotificationsModule,
     MongooseModule.forFeature([{ name: Organization.name, schema: OrganizationSchema }]),
     PassportModule,
     JwtModule.registerAsync({

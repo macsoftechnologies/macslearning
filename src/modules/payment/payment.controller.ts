@@ -11,7 +11,7 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Get()
-  @Roles('ORG_USER')
+  @Roles('ORG_USER', 'FINANCE')
   async getAllPayments(@Request() req: any, @Query() query: PaginationQueryDto) {
     return this.paymentService.getAllPayments(req.user.organizationId, query);
   }
@@ -23,8 +23,8 @@ export class PaymentController {
   }
 
   @Post(':id/generate-invoice')
-  @Roles('STUDENT')
+  @Roles('STUDENT', 'ORG_USER', 'FINANCE', 'SUPER_ADMIN')
   async generateInvoice(@Request() req: any, @Param('id') paymentId: string) {
-    return this.paymentService.generateInvoice(req.user.organizationId, req.user.userId, paymentId);
+    return this.paymentService.generateInvoice(req.user.organizationId, req.user.userId, paymentId, req.user.userType);
   }
 }

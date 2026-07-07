@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { ProgressService } from './progress.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -24,6 +24,25 @@ export class ProgressController {
       await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, body.courseId);
     }
     return this.progressService.markLessonComplete(req.user.organizationId, req.user.userId, body.courseId, body.moduleId, lessonId);
+  }
+
+  @Patch('lessons/:lessonId/watch-time')
+  async updateWatchTime(
+    @Request() req: any,
+    @Param('lessonId') lessonId: string,
+    @Body() body: { courseId: string; moduleId: string; watchedSeconds: number }
+  ) {
+    if (req.user.userType === 'STUDENT') {
+      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, body.courseId);
+    }
+    return this.progressService.updateWatchTime(
+      req.user.organizationId, 
+      req.user.userId, 
+      body.courseId, 
+      body.moduleId, 
+      lessonId, 
+      body.watchedSeconds
+    );
   }
 
   @Get('courses/:courseId')

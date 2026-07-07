@@ -54,8 +54,12 @@ export class PaymentService {
     return createPaginatedResponse(data, totalItems, page, limit);
   }
 
-  async generateInvoice(organizationId: string, studentId: string, paymentId: string) {
-    const payment = await this.paymentModel.findOne({ _id: paymentId, organizationId, studentId }).populate('studentId', 'fullName email').populate('courseId', 'title');
+  async generateInvoice(organizationId: string, userId: string, paymentId: string, userType: string = 'STUDENT') {
+    const filter: any = { _id: paymentId, organizationId };
+    if (userType === 'STUDENT') {
+      filter.studentId = userId;
+    }
+    const payment = await this.paymentModel.findOne(filter).populate('studentId', 'fullName email').populate('courseId', 'title');
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.invoiceGenerationStatus === 'GENERATED' && payment.invoicePath) {
       return payment;

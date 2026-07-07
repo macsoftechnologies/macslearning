@@ -26,7 +26,7 @@ export class Attempt {
   @Prop()
   submittedAt: Date;
 
-  @Prop({ type: [{ questionId: { type: Types.ObjectId, ref: 'Question' }, selectedOption: String, textAnswer: String }] })
+  @Prop({ type: [{ questionId: { type: Types.ObjectId, ref: 'Question' }, selectedOption: String, textAnswer: String, isCorrect: Boolean, marks: Number, isGraded: Boolean }] })
   answers: { questionId: Types.ObjectId; selectedOption?: string; textAnswer?: string; isCorrect?: boolean; marks?: number; isGraded?: boolean }[];
 
   @Prop({ default: 0 })

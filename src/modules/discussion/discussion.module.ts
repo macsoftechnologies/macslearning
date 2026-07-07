@@ -6,6 +6,7 @@ import { Thread, ThreadSchema } from './schemas/thread.schema';
 import { Reply, ReplySchema } from './schemas/reply.schema';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CoursesModule } from '../courses/courses.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     NotificationsModule,
     EnrollmentModule,
+    CoursesModule,
   ],
   controllers: [DiscussionController],
   providers: [DiscussionService],

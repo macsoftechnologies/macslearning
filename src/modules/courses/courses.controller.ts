@@ -8,6 +8,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateCourseDto, UpdateCourseDto } from './dto/courses.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @ApiTags('Courses')
 @ApiBearerAuth()
@@ -17,7 +18,8 @@ export class CoursesController {
   constructor(
     private readonly coursesService: CoursesService,
     private readonly enrollmentService: EnrollmentService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   @Get(':id/students')
@@ -44,7 +46,7 @@ export class CoursesController {
   @Get()
   @ApiOperation({ summary: 'Get all courses with pagination and search' })
   async getCourses(@Request() req: any, @Query() query: PaginationQueryDto, @Query('status') status?: string) {
-    return this.coursesService.getCourses(req.user.organizationId, query, status, req.user.userType);
+    return this.coursesService.getCourses(req.user.organizationId, query, status, req.user.userType, req.user.userId);
   }
 
   @Get(':id')
@@ -69,6 +71,18 @@ export class CoursesController {
       targetId: course._id,
       metadata: { courseTitle: course.title, status: updateData.status }
     });
+
+    if (updateData.status === 'PUBLISHED') {
+      this.notificationsService.createNotification(
+        req.user.organizationId.toString(),
+        req.user.userId.toString(),
+        'Course Published',
+        `Course "${course.title}" has been successfully published.`,
+        'COURSE',
+        `/courses/${course._id}`
+      ).catch(() => {});
+    }
+
     return course;
   }
 

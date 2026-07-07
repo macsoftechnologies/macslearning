@@ -11,6 +11,9 @@ export class Thread {
   @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Lesson', required: false })
+  lessonId?: Types.ObjectId;
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   authorId: Types.ObjectId;
 

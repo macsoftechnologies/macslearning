@@ -17,7 +17,7 @@ export class EnrollmentController {
     @Request() req: any,
     @Param('courseId') courseId: string,
   ) {
-    return this.enrollmentService.enrollStudent(req.user.userId, req.user.organizationId, courseId);
+    return this.enrollmentService.enrollStudent(req.user.userId, req.user.organizationId, courseId, req.user.regionId);
   }
 
   @Post()

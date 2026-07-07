@@ -20,13 +20,13 @@ export class SubscriptionPlansController {
   }
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ORG_USER')
+  @Roles('SUPER_ADMIN')
   async getSubscriptionPlans() {
     return this.subscriptionPlansService.getSubscriptionPlans();
   }
 
   @Get(':id')
-  @Roles('SUPER_ADMIN', 'ORG_USER')
+  @Roles('SUPER_ADMIN')
   async getSubscriptionPlanById(@Param('id') planId: string) {
     return this.subscriptionPlansService.getSubscriptionPlanById(planId);
   }

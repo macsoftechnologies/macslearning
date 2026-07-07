@@ -23,8 +23,11 @@ export class Course {
   @Prop({ type: { isPaid: Boolean, amount: Number, currency: String }, default: { isPaid: false, amount: 0, currency: 'INR' } })
   pricing: Record<string, any>;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
-  instructorId: Types.ObjectId;
+  @Prop([{ regionId: { type: Types.ObjectId, ref: 'Region' }, price: Number }])
+  regionalPrices?: { regionId: Types.ObjectId; price: number }[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }] })
+  instructorIds: Types.ObjectId[];
 
   @Prop({ type: Types.ObjectId, ref: 'Category' })
   categoryId: Types.ObjectId;
@@ -37,6 +40,21 @@ export class Course {
 
   @Prop({ default: false })
   isDeleted: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'CoursePlan' })
+  coursePlanId: Types.ObjectId;
+
+  @Prop()
+  validityDays: number;
+
+  @Prop({ default: 0 })
+  enrolledCount: number;
+
+  @Prop({ type: Types.ObjectId, ref: 'CertificateTemplate' })
+  certificateTemplateId?: Types.ObjectId;
+
+  @Prop({ enum: ['AUTO', 'MANUAL_APPROVAL'], default: 'AUTO' })
+  certificateIssueMode?: string;
 }
 
 export const CourseSchema = SchemaFactory.createForClass(Course);

@@ -115,4 +115,81 @@ export class ContentController {
   ) {
     return this.contentService.deleteLesson(req.user.organizationId, courseId, moduleId, lessonId);
   }
+
+  @Post('modules/:moduleId/lessons/:lessonId/video-quizzes')
+  @Roles('ORG_USER', 'FACULTY')
+  async createVideoQuiz(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @Body() quizData: any
+  ) {
+    return this.contentService.createVideoQuiz(req.user.organizationId, courseId, lessonId, quizData);
+  }
+
+  @Get('modules/:moduleId/lessons/:lessonId/video-quizzes')
+  @Roles('ORG_USER', 'FACULTY', 'STUDENT')
+  async getVideoQuizzes(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string
+  ) {
+    if (req.user.userType === 'STUDENT') {
+      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, courseId);
+    }
+    return this.contentService.getVideoQuizzes(req.user.organizationId, courseId, lessonId);
+  }
+
+  @Delete('modules/:moduleId/lessons/:lessonId/video-quizzes/:quizId')
+  @Roles('ORG_USER', 'FACULTY')
+  async deleteVideoQuiz(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @Param('quizId') quizId: string
+  ) {
+    return this.contentService.deleteVideoQuiz(req.user.organizationId, courseId, lessonId, quizId);
+  }
+
+  @Post('modules/:moduleId/lessons/:lessonId/video-quizzes/:quizId/answers')
+  @Roles('STUDENT')
+  async submitVideoQuizAnswer(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @Param('quizId') quizId: string,
+    @Body() answer: any
+  ) {
+    return this.contentService.submitVideoQuizAnswer(req.user.organizationId, req.user._id, courseId, lessonId, quizId, answer);
+  }
+
+  @Get('modules/:moduleId/lessons/:lessonId/video-quizzes/answers')
+  @Roles('ORG_USER', 'FACULTY')
+  async getVideoQuizAnswers(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string
+  ) {
+    return this.contentService.getVideoQuizAnswers(req.user.organizationId, courseId, lessonId);
+  }
+
+  @Get('modules/:moduleId/lessons/:lessonId/video-quizzes/my-answers')
+  @Roles('STUDENT')
+  async getMyVideoQuizAnswers(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string
+  ) {
+    return this.contentService.getMyVideoQuizAnswers(req.user.organizationId, req.user._id, courseId, lessonId);
+  }
+
+  @Post('video-quizzes/answers/:answerId/grade')
+  @Roles('ORG_USER', 'FACULTY')
+  async gradeVideoQuizAnswer(
+    @Request() req: any,
+    @Param('answerId') answerId: string,
+    @Body('marks') marks: number
+  ) {
+    return this.contentService.gradeVideoQuizAnswer(req.user.organizationId, req.user._id, answerId, marks);
+  }
 }

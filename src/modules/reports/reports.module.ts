@@ -8,6 +8,7 @@ import { Payment, PaymentSchema } from '../payment/schemas/payment.schema';
 import { Enrollment, EnrollmentSchema } from '../enrollment/schemas/enrollment.schema';
 import { LessonProgress, LessonProgressSchema } from '../progress/schemas/lessonProgress.schema';
 import { AssessmentResult, AssessmentResultSchema } from '../results/schemas/assessmentResult.schema';
+import { Organization, OrganizationSchema } from '../organizations/schemas/org.schema';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { AssessmentResult, AssessmentResultSchema } from '../results/schemas/ass
       { name: Enrollment.name, schema: EnrollmentSchema },
       { name: LessonProgress.name, schema: LessonProgressSchema },
       { name: AssessmentResult.name, schema: AssessmentResultSchema },
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
   ],
   controllers: [ReportsController],

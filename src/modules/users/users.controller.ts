@@ -1,10 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Param, Patch, Delete, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Param, Patch, BadRequestException, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CreateStudentDto, CreateUserDto, UpdateUserDto, UpdateUserStatusDto } from './dto/users.dto';
+import { CreateStudentDto, CreateUserDto, UpdateUserDto, CreateSuperAdminTeamDto, UpdateUserStatusDto } from './dto/users.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('Users')
@@ -39,26 +39,35 @@ export class UsersController {
     return this.usersService.createUser(orgId, userData);
   }
 
+  @Post('super-admin-team')
+  @Roles('SUPER_ADMIN')
+  async createSuperAdminTeamMember(@Body() adminData: CreateSuperAdminTeamDto) {
+    return this.usersService.createSuperAdminTeamMember(adminData);
+  }
+
+  @Patch('super-admin-team/:id')
+  @Roles('SUPER_ADMIN')
+  async updateSuperAdminTeamMember(@Param('id') id: string, @Body() updateData: UpdateUserDto) {
+    return this.usersService.updateUser(id, updateData);
+  }
+
+  @Patch('super-admin-team/:id/status')
+  @Roles('SUPER_ADMIN')
+  async updateSuperAdminTeamStatus(@Param('id') id: string, @Body() statusDto: UpdateUserStatusDto) {
+    return this.usersService.updateUser(id, { status: statusDto.status });
+  }
+
+  @Get('super-admin-team')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Get all super admin team members with pagination and search' })
+  async getSuperAdminTeam(@Query() query: PaginationQueryDto) {
+    return this.usersService.getSuperAdminTeam(query);
+  }
+
   @Post('students')
   @Roles('ORG_USER')
   async createStudent(@Request() req: any, @Body() studentData: CreateStudentDto) {
     return this.usersService.createStudent(req.user.organizationId, studentData);
-  }
-
-  @Patch(':id/status')
-  @Roles('SUPER_ADMIN', 'ORG_USER')
-  @ApiOperation({ summary: 'Update a user account status' })
-  async updateUserStatus(@Request() req: any, @Param('id') userId: string, @Body() statusDto: UpdateUserStatusDto) {
-    const organizationId = req.user.userType === 'ORG_USER' ? req.user.organizationId : undefined;
-    return this.usersService.updateUserStatus(userId, organizationId, statusDto.status);
-  }
-
-  @Delete(':id')
-  @Roles('SUPER_ADMIN', 'ORG_USER')
-  @ApiOperation({ summary: 'Soft delete a user' })
-  async deleteUser(@Request() req: any, @Param('id') userId: string) {
-    const organizationId = req.user.userType === 'ORG_USER' ? req.user.organizationId : undefined;
-    return this.usersService.softDeleteUser(userId, organizationId);
   }
 
   @Get()

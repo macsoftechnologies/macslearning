@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CourseModule, CourseModuleDocument } from './schemas/courseModule.schema';
@@ -7,6 +7,9 @@ import { LessonCheckpoint, LessonCheckpointDocument } from './schemas/lessonChec
 import { LessonProgress, LessonProgressDocument } from '../progress/schemas/lessonProgress.schema';
 import { LessonCheckpointAnswer, LessonCheckpointAnswerDocument } from './schemas/lessonCheckpointAnswer.schema';
 import { NotificationsService } from '../notifications/notifications.service';
+import { VideoQuiz, VideoQuizDocument } from './schemas/video-quiz.schema';
+import { VideoQuizAnswer, VideoQuizAnswerDocument } from './schemas/video-quiz-answer.schema';
+import { Course, CourseDocument } from '../courses/schemas/course.schema';
 
 @Injectable()
 export class ContentService {
@@ -16,10 +19,22 @@ export class ContentService {
     @InjectModel(LessonCheckpoint.name) private checkpointModel: Model<LessonCheckpointDocument>,
     @InjectModel(LessonProgress.name) private progressModel: Model<LessonProgressDocument>,
     @InjectModel('LessonCheckpointAnswer') private checkpointAnswerModel: Model<LessonCheckpointAnswerDocument>,
+    @InjectModel(VideoQuiz.name) private videoQuizModel: Model<VideoQuizDocument>,
+    @InjectModel(VideoQuizAnswer.name) private videoQuizAnswerModel: Model<VideoQuizAnswerDocument>,
+    @InjectModel(Course.name) private courseModel: Model<CourseDocument>,
     private notificationsService: NotificationsService,
   ) {}
 
+  private async ensureCourseNotPublished(courseId: string, organizationId: string) {
+    const course = await this.courseModel.findOne({ _id: courseId, organizationId });
+    if (!course) throw new NotFoundException('Course not found');
+    if (course.status === 'PUBLISHED') {
+      throw new BadRequestException('Cannot modify content of a published course.');
+    }
+  }
+
   async createModule(organizationId: string, courseId: string, moduleData: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const courseModule = new this.moduleModel({
       ...moduleData,
       organizationId,
@@ -34,6 +49,7 @@ export class ContentService {
   }
 
   async createLesson(organizationId: string, courseId: string, moduleId: string, lessonData: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = new this.lessonModel({
       ...lessonData,
       organizationId,
@@ -49,6 +65,7 @@ export class ContentService {
   }
 
   async updateModule(organizationId: string, courseId: string, moduleId: string, updateData: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const module = await this.moduleModel.findOneAndUpdate(
       { _id: moduleId, courseId, organizationId, isDeleted: false },
       { $set: updateData },
@@ -59,6 +76,7 @@ export class ContentService {
   }
 
   async deleteModule(organizationId: string, courseId: string, moduleId: string) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const module = await this.moduleModel.findOneAndUpdate(
       { _id: moduleId, courseId, organizationId, isDeleted: false },
       { $set: { isDeleted: true } },
@@ -69,6 +87,7 @@ export class ContentService {
   }
 
   async updateLesson(organizationId: string, courseId: string, moduleId: string, lessonId: string, updateData: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = await this.lessonModel.findOneAndUpdate(
       { _id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
       { $set: updateData },
@@ -79,6 +98,7 @@ export class ContentService {
   }
 
   async deleteLesson(organizationId: string, courseId: string, moduleId: string, lessonId: string) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = await this.lessonModel.findOneAndUpdate(
       { _id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
       { $set: { isDeleted: true } },
@@ -89,6 +109,7 @@ export class ContentService {
   }
 
   async createLessonCheckpoint(organizationId: string, courseId: string, lessonId: string, dto: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = await this.lessonModel.findOne({ _id: lessonId, organizationId, courseId, isDeleted: false });
     if (!lesson) throw new NotFoundException('Lesson not found');
 
@@ -183,6 +204,95 @@ export class ContentService {
       // don't fail grading if notification fails
     }
 
+    return ans;
+  }
+
+  async createVideoQuiz(organizationId: string, courseId: string, lessonId: string, quizData: any) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
+    const lesson = await this.lessonModel.findOne({ _id: lessonId, organizationId, courseId, isDeleted: false });
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    const quiz = new this.videoQuizModel({
+      ...quizData,
+      organizationId,
+      courseId,
+      lessonId,
+    });
+    return quiz.save();
+  }
+
+  async getVideoQuizzes(organizationId: string, courseId: string, lessonId: string) {
+    return this.videoQuizModel.find({ organizationId, courseId, lessonId }).sort({ timestampSeconds: 1 });
+  }
+
+  async deleteVideoQuiz(organizationId: string, courseId: string, lessonId: string, quizId: string) {
+    await this.ensureCourseNotPublished(courseId, organizationId);
+    const quiz = await this.videoQuizModel.findOneAndDelete({ _id: quizId, organizationId, courseId, lessonId });
+    if (!quiz) throw new NotFoundException('Video Quiz not found');
+    return quiz;
+  }
+
+  async submitVideoQuizAnswer(organizationId: string, studentId: string, courseId: string, lessonId: string, quizId: string, answer: any) {
+    const quiz = await this.videoQuizModel.findOne({ _id: quizId, organizationId, courseId, lessonId });
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    let isCorrect = false;
+    let isGraded = false;
+    let marks = 0;
+
+    if (quiz.type === 'MCQ' || quiz.type === 'TRUE_FALSE') {
+      isGraded = true;
+      if (quiz.options) {
+        const correctOpt = quiz.options.find(o => o.isCorrect);
+        if (correctOpt && correctOpt.text === answer.selectedOption) {
+          isCorrect = true;
+          marks = quiz.maxMarks || 1;
+        }
+      }
+    }
+
+    const answerDoc = new this.videoQuizAnswerModel({
+      organizationId,
+      courseId,
+      lessonId,
+      quizId,
+      studentId,
+      selectedOption: answer.selectedOption,
+      textAnswer: answer.textAnswer,
+      isCorrect,
+      isGraded,
+      marks
+    });
+    
+    // UPSERT behavior so if they re-answer it overwrites the old answer
+    return this.videoQuizAnswerModel.findOneAndUpdate(
+      { organizationId, studentId, quizId },
+      { $set: answerDoc.toObject() },
+      { new: true, upsert: true }
+    );
+  }
+
+  async getVideoQuizAnswers(organizationId: string, courseId: string, lessonId: string) {
+    return this.videoQuizAnswerModel
+      .find({ organizationId, courseId, lessonId })
+      .populate('studentId', 'fullName email')
+      .populate('quizId', 'questionText type maxMarks options correctAnswer timestampSeconds')
+      .sort({ createdAt: -1 });
+  }
+
+  async getMyVideoQuizAnswers(organizationId: string, studentId: string, courseId: string, lessonId: string) {
+    return this.videoQuizAnswerModel
+      .find({ organizationId, studentId, courseId, lessonId })
+      .populate('quizId', 'questionText type maxMarks options correctAnswer timestampSeconds')
+      .sort({ createdAt: 1 });
+  }
+
+  async gradeVideoQuizAnswer(organizationId: string, graderId: string, answerId: string, marks: number) {
+    const ans = await this.videoQuizAnswerModel.findOneAndUpdate(
+      { _id: answerId, organizationId },
+      { $set: { isGraded: true, marks, gradedBy: graderId, gradedAt: new Date() } },
+      { new: true }
+    );
+    if (!ans) throw new NotFoundException('Answer not found');
     return ans;
   }
 }

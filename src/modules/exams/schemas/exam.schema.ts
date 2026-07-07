@@ -26,11 +26,14 @@ export class Exam {
   @Prop({ required: true })
   totalMarks: number;
 
-  @Prop({ default: 1 })
+  @Prop({ default: 3 })
   maxAttempts: number;
 
   @Prop({ enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'], default: 'DRAFT' })
   status: string;
+
+  @Prop({ default: false })
+  isFinalExam: boolean;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: Types.ObjectId;

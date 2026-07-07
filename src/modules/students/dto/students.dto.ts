@@ -8,6 +8,10 @@ export class UpdateStudentDto {
   @IsString()
   @IsOptional()
   mobile?: string;
+
+  @IsString()
+  @IsOptional()
+  regionId?: string;
 }
 
 export class RejectStudentDto {

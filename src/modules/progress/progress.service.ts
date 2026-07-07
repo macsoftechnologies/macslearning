@@ -32,19 +32,43 @@ export class ProgressService {
       },
       { new: true, upsert: true }
     );
-    
     return progress;
   }
 
+  async updateWatchTime(organizationId: string, studentId: string, courseId: string, moduleId: string, lessonId: string, watchedSeconds: number) {
+    return this.progressModel.findOneAndUpdate(
+      { organizationId, studentId, courseId, lessonId },
+      { 
+        $set: { 
+          watchedSeconds, 
+          moduleId,
+          lastAccessedAt: new Date()
+        } 
+      },
+      { new: true, upsert: true }
+    );
+  }
+
   async getCourseProgress(organizationId: string, studentId: string, courseId: string) {
-    // Return the full list of lesson progress records so the frontend can check per-lesson completion
     const progressList = await this.progressModel.find({
       organizationId,
       studentId,
       courseId,
     }).lean();
 
-    return progressList;
+    const totalLessons = await this.lessonModel.countDocuments({ courseId, organizationId, isDeleted: false });
+    const completedCount = progressList.filter(p => p.isCompleted).length;
+    
+    let progressPercentage = 0;
+    if (totalLessons > 0) {
+      progressPercentage = Math.round((completedCount / totalLessons) * 100);
+    }
+
+    return {
+      progressPercentage,
+      completedLessonIds: progressList.filter(p => p.isCompleted).map(p => p.lessonId),
+      completedLessons: progressList
+    };
   }
 
   async getAllStudentProgressForCourse(organizationId: string, courseId: string) {

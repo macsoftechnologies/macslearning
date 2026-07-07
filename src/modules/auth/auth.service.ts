@@ -6,7 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Organization, OrganizationDocument } from '../organizations/schemas/org.schema';
 import { ChangePasswordDto, LoginDto } from './dto/auth.dto';
-
+import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -16,6 +16,7 @@ export class AuthService {
     @InjectModel(Organization.name) private organizationModel: Model<OrganizationDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -24,6 +25,7 @@ export class AuthService {
     let organizationId: string | undefined;
     let organizationSlug: string | undefined;
     let organizationLoginUrl: string | undefined;
+    let organizationName: string | undefined;
 
     let organization: OrganizationDocument | null = null;
     if (organizationCode) {
@@ -37,6 +39,7 @@ export class AuthService {
       organizationId = organization._id.toString();
       organizationSlug = organization.slug;
       organizationLoginUrl = organization.loginUrl;
+      organizationName = organization.name;
     }
 
     if (!organizationId) {
@@ -87,8 +90,11 @@ export class AuthService {
     const payload = {
       userId: user._id,
       email: user.email,
+      fullName: user.fullName,
       userType: user.userType,
       organizationId: user.organizationId,
+      regionId: user.regionId,
+      permissions: user.modulePermissions,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -117,6 +123,15 @@ export class AuthService {
     user.refreshTokens.push(tokenDoc);
     await user.save();
 
+    // Send login notification silently (no await necessary for user flow)
+    this.notificationsService.createNotification(
+      user.organizationId.toString(),
+      user._id.toString(),
+      'New Login Detected',
+      `Your account was logged in to at ${new Date().toLocaleString()}.`,
+      'SYSTEM'
+    ).catch(e => console.error('Error sending login notification:', e));
+
     return {
       message: 'Login successful',
       accessToken,
@@ -125,6 +140,7 @@ export class AuthService {
         code: organizationCode?.toUpperCase(),
         slug: organizationSlug,
         loginUrl: organizationLoginUrl,
+        name: organizationName,
       },
       user: {
         id: user._id,
@@ -135,6 +151,8 @@ export class AuthService {
         organizationCode: organizationCode?.toUpperCase(),
         organizationSlug,
         organizationLoginUrl,
+        organizationName,
+        permissions: user.modulePermissions,
       }
     };
   }
@@ -175,8 +193,11 @@ export class AuthService {
       const payload = {
         userId: user._id,
         email: user.email,
+        fullName: user.fullName,
         userType: user.userType,
         organizationId: user.organizationId,
+        regionId: user.regionId,
+        permissions: user.modulePermissions,
       };
 
       const accessToken = this.jwtService.sign(payload);
@@ -300,19 +321,48 @@ export class AuthService {
     const payload = {
       userId: user._id,
       email: user.email,
+      fullName: user.fullName,
       userType: user.userType,
       organizationId: user.organizationId,
+      permissions: user.modulePermissions,
     };
 
     const accessToken = this.jwtService.sign(payload);
+
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    const refreshExpires = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
+    const refreshDurationMs = this.parseDuration(refreshExpires);
+
+    const refreshToken = this.jwtService.sign(
+      { userId: user._id },
+      { secret: refreshSecret, expiresIn: refreshExpires as any }
+    );
+
+    const salt = await bcrypt.genSalt(10);
+    const tokenHash = await bcrypt.hash(refreshToken, salt);
+
+    this.pruneRefreshTokens(user);
+
+    const tokenDoc = {
+      tokenId: new Date().getTime().toString(),
+      tokenHash,
+      issuedAt: new Date(),
+      expiresAt: new Date(Date.now() + refreshDurationMs),
+    };
+
+    user.refreshTokens.push(tokenDoc);
+    await user.save();
+
     return {
       message: 'Super Admin login successful',
       accessToken,
+      refreshToken,
       user: {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
         userType: user.userType,
+        permissions: user.modulePermissions,
       }
     };
   }
@@ -337,11 +387,19 @@ export class AuthService {
     
     await user.save();
 
+    this.notificationsService.createNotification(
+      user.organizationId.toString(),
+      user._id.toString(),
+      'Password Changed',
+      'Your password was successfully updated.',
+      'SYSTEM'
+    ).catch(e => console.error('Error sending password change notification:', e));
+
     return { message: 'Password changed successfully' };
   }
 
   async register(registerDto: any) {
-    const { email, password, fullName, mobile, organizationCode } = registerDto;
+    const { email, password, fullName, mobile, organizationCode, regionId } = registerDto;
     let { organizationId } = registerDto;
 
     if (organizationCode && !organizationId) {
@@ -388,6 +446,7 @@ export class AuthService {
       userType: 'STUDENT',
       status: 'PENDING',
       organizationId,
+      regionId,
     });
 
     await user.save();

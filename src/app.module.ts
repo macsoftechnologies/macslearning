@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bull';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -26,6 +24,8 @@ import { DiscussionModule } from './modules/discussion/discussion.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CategoryModule } from './modules/category/category.module';
 import { SubscriptionPlansModule } from './modules/subscription-plans/subscription-plans.module';
+import { RegionsModule } from './modules/regions/regions.module';
+import { FacultyModule } from './modules/faculty/faculty.module';
 
 @Module({
   imports: [
@@ -47,23 +47,9 @@ import { SubscriptionPlansModule } from './modules/subscription-plans/subscripti
       }),
       inject: [ConfigService],
     }),
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          ttl: Number(process.env.RATE_LIMIT_WINDOW_MS ? Number(process.env.RATE_LIMIT_WINDOW_MS) / 1000 : 60),
-          limit: Number(process.env.RATE_LIMIT_MAX) || 10,
-        },
-      ],
-    }),
-    AuthModule, UsersModule, OrganizationsModule, StudentsModule, CoursesModule, EnrollmentModule, PaymentModule, ExamsModule, ResultsModule, CertificatesModule, NotificationsModule, ReportsModule, ContentModule, ProgressModule, AssignmentsModule, DiscussionModule, AuditModule, CategoryModule, SubscriptionPlansModule
+    AuthModule, UsersModule, OrganizationsModule, StudentsModule, CoursesModule, EnrollmentModule, PaymentModule, ExamsModule, ResultsModule, CertificatesModule, NotificationsModule, ReportsModule, ContentModule, ProgressModule, AssignmentsModule, DiscussionModule, AuditModule, CategoryModule, SubscriptionPlansModule, RegionsModule, FacultyModule
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

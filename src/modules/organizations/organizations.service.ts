@@ -1,82 +1,71 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
 import { Organization, OrganizationDocument } from './schemas/org.schema';
+import { CoursePlan, CoursePlanDocument } from './schemas/course-plan.schema';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { SubscriptionPlan, SubscriptionPlanDocument } from '../subscription-plans/schemas/subscription-plan.schema';
-import { User, UserDocument } from '../users/schemas/user.schema';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     @InjectModel(Organization.name) private orgModel: Model<OrganizationDocument>,
+    @InjectModel(CoursePlan.name) private coursePlanModel: Model<CoursePlanDocument>,
     @InjectModel(SubscriptionPlan.name)
     private subscriptionPlanModel: Model<SubscriptionPlanDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    private configService: ConfigService,
+    private usersService: UsersService,
   ) {}
 
   async createOrganization(orgData: any) {
-    const requestedPlanType = orgData?.subscriptionConfig?.planType?.toUpperCase();
+    const planId = orgData?.subscriptionPlanId;
     let resolvedSubscriptionConfig = orgData?.subscriptionConfig;
 
-    if (requestedPlanType) {
-      const plan = await this.subscriptionPlanModel.findOne({ code: requestedPlanType });
+    if (planId) {
+      const plan = await this.subscriptionPlanModel.findById(planId);
       if (plan) {
         const startDate = new Date();
-        const expiresAt = this.calculateExpiryDate(startDate, plan.billingCycle || 'MONTHLY');
+        const expiresAt = new Date(startDate.getTime() + (plan.durationInDays || 30) * 24 * 60 * 60 * 1000);
 
         resolvedSubscriptionConfig = {
           planId: plan._id,
           planType: plan.code,
-          billingCycle: plan.billingCycle || 'MONTHLY',
-          maxStudents: plan.features?.maxStudents ?? 0,
-          maxStorageGB: plan.features?.maxStorageGB ?? 0,
+          durationInDays: plan.durationInDays || 30,
+          maxStudents: plan.maxUsers ?? 0,
+          maxStorageGB: plan.storageGB ?? 0,
           expiresAt,
         };
       }
     }
 
-    const slug = this.generateOrganizationSlug(orgData?.name);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const loginUrl = `${frontendUrl.replace(/\/$/, '')}/login/${slug}`;
-
+    const domain = orgData.domain || `${orgData.code.toLowerCase()}.lms.com`;
     const organizationPayload = {
       ...orgData,
-      slug,
-      loginUrl,
+      domain,
+      slug: orgData.code.toLowerCase(),
+      loginUrl: `/${orgData.code.toLowerCase()}/login`,
+      contactInfo: {
+        email: orgData.contactEmail,
+        phone: orgData.contactPhone,
+        address: orgData.address,
+      },
       subscriptionConfig: resolvedSubscriptionConfig,
     };
 
-    const organization = await this.orgModel.create(organizationPayload);
+    const org = await this.orgModel.create(organizationPayload);
 
-    if (orgData?.adminUser) {
-      const existingUser = await this.userModel.findOne({
-        email: orgData.adminUser.email,
-        organizationId: organization._id,
-      });
-      if (existingUser) {
-        throw new BadRequestException('Admin user with this email already exists for the organization');
-      }
-
-      const salt = await bcrypt.genSalt(12);
-      const passwordHash = await bcrypt.hash(orgData.adminUser.password, salt);
-      const adminUser = new this.userModel({
-        email: orgData.adminUser.email,
-        passwordHash,
-        fullName: orgData.adminUser.fullName,
-        mobile: orgData.adminUser.mobile,
+    if (orgData.adminEmail && orgData.adminPassword) {
+      await this.usersService.createUser(org._id.toString(), {
+        email: orgData.adminEmail,
+        password: orgData.adminPassword,
+        fullName: orgData.adminFullName || 'Org Admin',
+        mobile: orgData.adminMobile,
         userType: 'ORG_USER',
-        status: 'ACTIVE',
-        organizationId: organization._id,
       });
-      await adminUser.save();
     }
 
-    return organization;
+    return org;
   }
 
   async getOrganizations(queryDto: PaginationQueryDto) {
@@ -97,36 +86,23 @@ export class OrganizationsService {
     return createPaginatedResponse(data, totalItems, page, limit);
   }
 
-  private generateOrganizationSlug(name?: string): string {
-    return (name || 'organization')
-      .toString()
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+  async getOrganizationById(id: string) {
+    const org = await this.orgModel.findOne({ _id: id, isDeleted: false });
+    if (!org) throw new NotFoundException('Organization not found');
+    return org;
   }
 
-  private calculateExpiryDate(startDate: Date, billingCycle: string): Date {
-    const endDate = new Date(startDate);
-
-    switch (billingCycle?.toUpperCase()) {
-      case 'QUARTERLY':
-        endDate.setMonth(endDate.getMonth() + 3);
-        break;
-      case 'HALF_YEARLY':
-        endDate.setMonth(endDate.getMonth() + 6);
-        break;
-      case 'YEARLY':
-        endDate.setFullYear(endDate.getFullYear() + 1);
-        break;
-      case 'MONTHLY':
-      default:
-        endDate.setMonth(endDate.getMonth() + 1);
-        break;
-    }
-
-    return endDate;
+  async updateOrganization(id: string, updateData: any) {
+    const org = await this.orgModel.findOneAndUpdate(
+      { _id: id, isDeleted: false },
+      { $set: updateData },
+      { new: true }
+    );
+    if (!org) throw new NotFoundException('Organization not found');
+    return org;
   }
+
+
 
   async updateStatus(orgId: string, status: string) {
     const org = await this.orgModel.findByIdAndUpdate(
@@ -138,26 +114,28 @@ export class OrganizationsService {
     return org;
   }
 
-  async getOrganizationById(orgId: string) {
-    const org = await this.orgModel.findOne({ _id: orgId, isDeleted: false });
-    if (!org) throw new NotFoundException('Organization not found');
-    return org;
+  // --- Course Plans ---
+  async createCoursePlan(organizationId: string, planData: any) {
+    return this.coursePlanModel.create({ ...planData, organizationId });
   }
 
-  async updateOrganization(orgId: string, updateData: any) {
-    const updateFields: any = {};
-    for (const [key, value] of Object.entries(updateData || {})) {
-      if (value !== undefined) {
-        updateFields[key] = value;
-      }
-    }
+  async getCoursePlans(organizationId: string) {
+    return this.coursePlanModel.find({ organizationId }).sort({ createdAt: -1 });
+  }
 
-    const org = await this.orgModel.findOneAndUpdate(
-      { _id: orgId, isDeleted: false },
-      { $set: updateFields },
+  async updateCoursePlan(organizationId: string, planId: string, planData: any) {
+    const plan = await this.coursePlanModel.findOneAndUpdate(
+      { _id: planId, organizationId },
+      { $set: planData },
       { new: true }
     );
-    if (!org) throw new NotFoundException('Organization not found');
-    return org;
+    if (!plan) throw new NotFoundException('Course plan not found');
+    return plan;
+  }
+
+  async deleteCoursePlan(organizationId: string, planId: string) {
+    const plan = await this.coursePlanModel.findOneAndDelete({ _id: planId, organizationId });
+    if (!plan) throw new NotFoundException('Course plan not found');
+    return { success: true };
   }
 }

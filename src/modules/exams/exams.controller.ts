@@ -15,7 +15,7 @@ export class ExamsController {
   ) {}
 
   @Post('courses/:courseId/exams')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async createExam(@Request() req: any, @Param('courseId') courseId: string, @Body() examData: CreateExamDto) {
     return this.examsService.createExam(req.user.organizationId, courseId, req.user.userId, examData);
   }
@@ -36,13 +36,13 @@ export class ExamsController {
   }
 
   @Patch('exams/:examId/publish')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async publishExam(@Request() req: any, @Param('examId') examId: string) {
     return this.examsService.publishExam(req.user.organizationId, examId);
   }
 
   @Post('exams/:examId/questions')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async addQuestion(@Request() req: any, @Param('examId') examId: string, @Body() questionData: QuestionDto) {
     return this.examsService.addQuestion(req.user.organizationId, examId, questionData);
   }
@@ -66,13 +66,13 @@ export class ExamsController {
   }
 
   @Patch('exams/:examId/questions/:questionId')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async updateQuestion(@Request() req: any, @Param('examId') examId: string, @Param('questionId') questionId: string, @Body() updateData: UpdateQuestionDto) {
     return this.examsService.updateQuestion(req.user.organizationId, examId, questionId, updateData);
   }
 
   @Delete('exams/:examId/questions/:questionId')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async deleteQuestion(@Request() req: any, @Param('examId') examId: string, @Param('questionId') questionId: string) {
     return this.examsService.deleteQuestion(req.user.organizationId, examId, questionId);
   }
@@ -95,14 +95,24 @@ export class ExamsController {
     return this.examsService.getAttemptHistory(req.user.organizationId, req.user.userId, examId);
   }
 
+  @Get('exams/:examId/attempts/:attemptId/review')
+  async getAttemptReview(@Request() req: any, @Param('examId') examId: string, @Param('attemptId') attemptId: string) {
+    if (req.user.userType === 'STUDENT') {
+      const exam = await this.examsService.getExamById(req.user.organizationId, examId);
+      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, exam.courseId.toString());
+      return this.examsService.getAttemptReview(req.user.organizationId, req.user.userId, examId, attemptId);
+    }
+    return this.examsService.getAttemptReviewForFaculty(req.user.organizationId, examId, attemptId);
+  }
+
   @Get('exams/:examId/attempts/:attemptId/shortanswers')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async getShortAnswers(@Request() req: any, @Param('examId') examId: string, @Param('attemptId') attemptId: string) {
     return this.examsService.getShortAnswers(req.user.organizationId, examId, attemptId);
   }
 
   @Patch('exams/:examId/attempts/:attemptId/grade-answer')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async gradeShortAnswer(@Request() req: any, @Param('examId') examId: string, @Param('attemptId') attemptId: string, @Body() body: GradeShortAnswerDto) {
     return this.examsService.gradeShortAnswer(req.user.organizationId, req.user.userId, examId, attemptId, body.questionId, body.marks);
   }
@@ -126,13 +136,13 @@ export class ExamsController {
   }
 
   @Get('exams/:examId/results')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async getExamResults(@Request() req: any, @Param('examId') examId: string) {
     return this.examsService.getExamResults(req.user.organizationId, examId);
   }
 
   @Patch('results/:resultId/publish')
-  @Roles('ORG_USER')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async publishResult(@Request() req: any, @Param('resultId') resultId: string) {
     return this.examsService.publishResult(req.user.organizationId, resultId, req.user.userId);
   }

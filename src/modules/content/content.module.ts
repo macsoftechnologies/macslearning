@@ -10,6 +10,9 @@ import { LessonCheckpointController } from '../content/lesson-checkpoint.control
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LessonProgress, LessonProgressSchema } from '../progress/schemas/lessonProgress.schema';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
+import { VideoQuiz, VideoQuizSchema } from './schemas/video-quiz.schema';
+import { VideoQuizAnswer, VideoQuizAnswerSchema } from './schemas/video-quiz-answer.schema';
+import { Course, CourseSchema } from '../courses/schemas/course.schema';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { EnrollmentModule } from '../enrollment/enrollment.module';
       { name: LessonCheckpoint.name, schema: LessonCheckpointSchema },
       { name: LessonCheckpointAnswer.name, schema: LessonCheckpointAnswerSchema },
       { name: LessonProgress.name, schema: LessonProgressSchema },
+      { name: VideoQuiz.name, schema: VideoQuizSchema },
+      { name: VideoQuizAnswer.name, schema: VideoQuizAnswerSchema },
+      { name: Course.name, schema: CourseSchema },
     ])
   ],
   controllers: [ContentController, LessonCheckpointController],

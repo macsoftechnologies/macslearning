@@ -12,7 +12,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: false }));
   app.enableCors({ origin: frontendUrl, credentials: true });
   app.useStaticAssets(join(__dirname, '..', 'public', 'uploads'), { prefix: '/uploads' });
   app.setGlobalPrefix('api/v1');

@@ -26,9 +26,25 @@ export class StudentsService {
 
     const skip = (page - 1) * limit;
     const [data, totalItems] = await Promise.all([
-      this.userModel.find(query).select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      this.userModel.find(query).populate('regionId', 'name').select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       this.userModel.countDocuments(query),
     ]);
+
+    if (data.length > 0) {
+      const { Types } = require('mongoose');
+      const studentIds = data.map(s => new Types.ObjectId(s._id.toString()));
+      const enrollments = await this.userModel.db.collection('enrollments').aggregate([
+        { $match: { studentId: { $in: studentIds }, organizationId: new Types.ObjectId(organizationId), status: 'ACTIVE' } },
+        { $group: { _id: '$studentId', count: { $sum: 1 } } }
+      ]).toArray();
+      
+      const countsMap: Record<string, number> = {};
+      enrollments.forEach(e => countsMap[e._id.toString()] = e.count);
+      
+      data.forEach(s => {
+        (s as any).enrolledCoursesCount = countsMap[s._id.toString()] || 0;
+      });
+    }
 
     return createPaginatedResponse(data, totalItems, page, limit);
   }
@@ -82,7 +98,7 @@ export class StudentsService {
 
     const skip = (page - 1) * limit;
     const [data, totalItems] = await Promise.all([
-      this.userModel.find(query).select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      this.userModel.find(query).populate('regionId', 'name').select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       this.userModel.countDocuments(query),
     ]);
 

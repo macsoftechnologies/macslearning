@@ -17,8 +17,8 @@ export class CreateUserDto {
   @IsNotEmpty()
   fullName: string;
 
-  @ApiPropertyOptional({ description: 'User role type', enum: ['ORG_USER', 'FACULTY', 'STUDENT'] })
-  @IsEnum(['ORG_USER', 'FACULTY', 'STUDENT'])
+  @ApiPropertyOptional({ description: 'User role type', enum: ['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'] })
+  @IsEnum(['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'])
   @IsOptional()
   userType?: string;
 
@@ -31,6 +31,36 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   mobile?: string;
+
+  @ApiPropertyOptional({ description: 'Array of permissions assigned to this user' })
+  @IsOptional()
+  modulePermissions?: string[];
+}
+
+export class CreateSuperAdminTeamDto {
+  @ApiProperty({ description: 'User email address' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({ description: 'Account password' })
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @ApiProperty({ description: 'Full name of the user' })
+  @IsString()
+  @IsNotEmpty()
+  fullName: string;
+
+  @ApiPropertyOptional({ description: 'Mobile phone number' })
+  @IsString()
+  @IsOptional()
+  mobile?: string;
+
+  @ApiProperty({ description: 'Array of permissions assigned to this Super Admin team member' })
+  @IsOptional()
+  modulePermissions?: string[];
 }
 
 export class CreateStudentDto {
@@ -53,6 +83,11 @@ export class CreateStudentDto {
   @IsString()
   @IsOptional()
   mobile?: string;
+
+  @ApiProperty({ description: 'Region ID for pricing and grouping' })
+  @IsString()
+  @IsNotEmpty()
+  regionId: string;
 }
 
 export class UpdateUserDto {
@@ -70,6 +105,15 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   designation?: string;
+
+  @ApiPropertyOptional({ description: 'Region ID' })
+  @IsString()
+  @IsOptional()
+  regionId?: string;
+
+  @ApiPropertyOptional({ description: 'Array of permissions assigned to this user' })
+  @IsOptional()
+  modulePermissions?: string[];
 }
 
 export class UpdateUserStatusDto {

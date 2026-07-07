@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested, IsObject } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested, IsObject, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PricingDto {
@@ -11,6 +11,16 @@ export class PricingDto {
 
   @IsString()
   currency: string;
+}
+
+export class RegionPriceDto {
+  @IsString()
+  @IsNotEmpty()
+  regionId: string;
+
+  @IsNumber()
+  @Type(() => Number)
+  price: number;
 }
 
 export class CreateCourseDto {
@@ -26,9 +36,10 @@ export class CreateCourseDto {
   @IsOptional()
   categoryId?: string;
 
-  @IsString()
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
-  instructorId?: string;
+  instructorIds?: string[];
 
   @IsString()
   @IsOptional()
@@ -38,6 +49,21 @@ export class CreateCourseDto {
   @ValidateNested()
   @Type(() => PricingDto)
   pricing?: PricingDto;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => RegionPriceDto)
+  regionalPrices?: RegionPriceDto[];
+
+  @IsString()
+  @IsNotEmpty()
+  coursePlanId: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  validityDays?: number;
 }
 
 export class UpdateCourseDto {
@@ -57,4 +83,23 @@ export class UpdateCourseDto {
   @ValidateNested()
   @Type(() => PricingDto)
   pricing?: PricingDto;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => RegionPriceDto)
+  regionalPrices?: RegionPriceDto[];
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  validityDays?: number;
+
+  @IsString()
+  @IsOptional()
+  certificateTemplateId?: string;
+
+  @IsEnum(['AUTO', 'MANUAL_APPROVAL'])
+  @IsOptional()
+  certificateIssueMode?: string;
 }

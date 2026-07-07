@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, UseGuards, Request, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards, Request, Patch } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -25,11 +25,15 @@ export class DiscussionController {
   }
 
   @Get('courses/:courseId/threads')
-  async getThreads(@Request() req: any, @Param('courseId') courseId: string) {
+  async getThreads(
+    @Request() req: any, 
+    @Param('courseId') courseId: string,
+    @Query('lessonId') lessonId?: string
+  ) {
     if (req.user.userType === 'STUDENT') {
       await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, courseId);
     }
-    return this.discussionService.getThreads(req.user.organizationId, courseId);
+    return this.discussionService.getThreads(req.user.organizationId, courseId, lessonId);
   }
 
   @Get('courses/:courseId/threads/:threadId')

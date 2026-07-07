@@ -14,6 +14,16 @@ export class ResultsController {
     return this.resultsService.getMyResults(req.user.organizationId, req.user.userId);
   }
 
+  @Get('student/attempts')
+  async getMyAttempts(@Request() req: any) {
+    return this.resultsService.getMyAttempts(req.user.organizationId, req.user.userId);
+  }
+
+  @Get('student/video-quizzes')
+  async getMyVideoQuizAnswers(@Request() req: any) {
+    return this.resultsService.getMyVideoQuizAnswers(req.user.organizationId, req.user.userId);
+  }
+
   @Get('courses/:courseId')
   @Roles('ORG_USER')
   async getCourseResults(@Request() req: any, @Param('courseId') courseId: string) {

@@ -17,8 +17,14 @@ export class SubscriptionPlan {
   @Prop({ default: 'USD' })
   currency: string;
 
-  @Prop({ enum: ['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY'], default: 'MONTHLY' })
-  billingCycle: string;
+  @Prop({ type: Number, required: true, default: 30 })
+  durationInDays: number;
+
+  @Prop({ type: Number })
+  maxUsers: number;
+
+  @Prop({ type: Number })
+  storageGB: number;
 
   @Prop({ type: Object })
   features: Record<string, any>;

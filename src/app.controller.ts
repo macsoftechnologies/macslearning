@@ -40,7 +40,7 @@ export class AppController {
       fileSize: 5 * 1024 * 1024,
     },
     fileFilter: (req, file, cb) => {
-      const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.zip'];
       const ext = extname(file.originalname).toLowerCase();
       if (!allowed.includes(ext)) {
         return cb(new BadRequestException('Unsupported file type'), false);

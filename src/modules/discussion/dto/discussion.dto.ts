@@ -8,6 +8,10 @@ export class CreateThreadDto {
   @IsString()
   @IsNotEmpty()
   content: string;
+
+  @IsOptional()
+  @IsString()
+  lessonId?: string;
 }
 
 export class AddReplyDto {

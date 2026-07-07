@@ -4,11 +4,16 @@ import { Model } from 'mongoose';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { Notification, NotificationDocument } from './schemas/notification.schema';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
+
+import { NotificationsGateway } from './notifications.gateway';
 
 @Injectable()
 export class NotificationsService {
   constructor(
-    @InjectModel(Notification.name) private notificationModel: Model<NotificationDocument>
+    @InjectModel(Notification.name) private notificationModel: Model<NotificationDocument>,
+    private readonly gateway: NotificationsGateway
   ) {}
 
   async createNotification(organizationId: string, userId: string, title: string, message: string, type: string = 'SYSTEM', link?: string) {
@@ -18,9 +23,17 @@ export class NotificationsService {
       title,
       message,
       type,
-      link
+      link,
+      isRead: false
     });
-    return notification.save();
+    const savedNotification = await notification.save();
+    
+    // Emit to WebSocket directly
+    try {
+       this.gateway.sendNotification(userId, savedNotification);
+    } catch(e) {}
+    
+    return savedNotification;
   }
 
   async getUserNotifications(organizationId: string, userId: string, queryDto: PaginationQueryDto) {

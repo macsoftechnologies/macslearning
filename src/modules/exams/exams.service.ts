@@ -81,7 +81,7 @@ export class ExamsService {
   async getQuestions(organizationId: string, examId: string, role?: string) {
     let query = this.questionModel.find({ organizationId, examId, isDeleted: false }).sort({ orderIndex: 1 });
     if (role === 'STUDENT') {
-      query = query.select({ 'options.isCorrect': 0 });
+      query = query.select({ 'options.isCorrect': 0, correctAnswer: 0 });
     }
     return query.exec();
   }
@@ -116,7 +116,7 @@ export class ExamsService {
     }
 
     const completedAttempts = await this.attemptModel.countDocuments({ examId, studentId, organizationId, status: { $ne: 'IN_PROGRESS' } });
-    const maxAttempts = exam.maxAttempts ?? 1;
+    const maxAttempts = exam.maxAttempts ?? 3;
     if (completedAttempts >= maxAttempts) {
       throw new BadRequestException('Exam already attempted maximum times');
     }
@@ -174,9 +174,15 @@ export class ExamsService {
 
       let isCorrect = false;
       let answerMarks = typeof answer.marks === 'number' ? answer.marks : 0;
-      if (question.type === 'MCQ' || question.type === 'TRUE_FALSE') {
+      if (question.type === 'MCQ') {
         const correctOption = question.options.find(opt => opt.isCorrect);
-        if (correctOption && correctOption.text === answer.selectedOption) {
+        if (correctOption && (correctOption.text === answer.selectedOption || (correctOption as any)._id?.toString() === answer.selectedOption || (correctOption as any).id === answer.selectedOption)) {
+          isCorrect = true;
+          answerMarks = question.marks;
+          marksObtained += answerMarks;
+        }
+      } else if (question.type === 'TRUE_FALSE') {
+        if (question.correctAnswer && question.correctAnswer.toLowerCase() === (answer.selectedOption || '').toLowerCase()) {
           isCorrect = true;
           answerMarks = question.marks;
           marksObtained += answerMarks;
@@ -198,26 +204,44 @@ export class ExamsService {
     const percentage = (marksObtained / exam.totalMarks) * 100;
     const isPassed = percentage >= exam.passingPercentage;
 
-    attempt.answers = evaluatedAnswers;
     attempt.marksObtained = marksObtained;
     attempt.percentage = percentage;
     attempt.isPassed = isPassed;
-    attempt.status = 'SUBMITTED';
-    attempt.submittedAt = new Date();
+    
+    await this.attemptModel.updateOne(
+      { _id: attempt._id },
+      {
+        $set: {
+          answers: evaluatedAnswers,
+          status: 'SUBMITTED',
+          submittedAt: new Date(),
+          marksObtained: marksObtained,
+          percentage: percentage,
+          isPassed: isPassed,
+        }
+      }
+    );
 
-    await attempt.save();
-
-    const result = new this.resultModel({
-      organizationId,
-      studentId,
-      courseId: exam.courseId,
-      examId,
-      attemptId: attempt._id,
-      marksObtained,
-      totalMarks: exam.totalMarks,
-      percentage,
-      isPassed,
-    });
+    let result = await this.resultModel.findOne({ examId, studentId, organizationId });
+    if (result) {
+      result.attemptId = attempt._id;
+      result.marksObtained = marksObtained;
+      result.totalMarks = exam.totalMarks;
+      result.percentage = percentage;
+      result.isPassed = isPassed;
+    } else {
+      result = new this.resultModel({
+        organizationId,
+        studentId,
+        courseId: exam.courseId,
+        examId,
+        attemptId: attempt._id,
+        marksObtained,
+        totalMarks: exam.totalMarks,
+        percentage,
+        isPassed,
+      });
+    }
     
     await result.save();
 
@@ -240,6 +264,25 @@ export class ExamsService {
 
   async getExamResults(organizationId: string, examId: string) {
     return this.resultModel.find({ organizationId, examId }).populate('studentId', 'fullName email');
+  }
+
+  async getAttemptReview(organizationId: string, studentId: string, examId: string, attemptId: string) {
+    const attempt = await this.attemptModel.findOne({ _id: attemptId, examId, studentId, organizationId });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+    if (attempt.status !== 'SUBMITTED') throw new BadRequestException('Attempt not yet submitted');
+
+    const questions = await this.questionModel.find({ examId, organizationId, isDeleted: false }).sort({ orderIndex: 1 });
+    
+    return { attempt, questions };
+  }
+
+  async getAttemptReviewForFaculty(organizationId: string, examId: string, attemptId: string) {
+    const attempt = await this.attemptModel.findOne({ _id: attemptId, examId, organizationId }).populate('studentId', 'fullName email');
+    if (!attempt) throw new NotFoundException('Attempt not found');
+
+    const questions = await this.questionModel.find({ examId, organizationId, isDeleted: false }).sort({ orderIndex: 1 });
+    
+    return { attempt, questions };
   }
 
   async getShortAnswers(organizationId: string, examId: string, attemptId: string) {
@@ -275,6 +318,7 @@ export class ExamsService {
 
     attempt.answers[answerIndex].marks = marks;
     attempt.answers[answerIndex].isGraded = true;
+    attempt.markModified('answers');
 
     // Recompute marksObtained: start with non-short-answer marks (already evaluated earlier)
     let marksObtained = 0;
@@ -291,11 +335,24 @@ export class ExamsService {
     attempt.marksObtained = marksObtained;
     attempt.percentage = percentage;
     attempt.isPassed = isPassed;
-    await attempt.save();
+    
+    await this.attemptModel.updateOne(
+      { _id: attemptId },
+      {
+        $set: {
+          [`answers.${answerIndex}.marks`]: marks,
+          [`answers.${answerIndex}.isGraded`]: true,
+          marksObtained: marksObtained,
+          percentage: percentage,
+          isPassed: isPassed,
+        }
+      }
+    );
 
     // update or create result for this attempt
-    const existingResult = await this.resultModel.findOne({ attemptId: attempt._id });
+    let existingResult = await this.resultModel.findOne({ examId, studentId: attempt.studentId, organizationId });
     if (existingResult) {
+      existingResult.attemptId = attempt._id;
       existingResult.marksObtained = marksObtained;
       existingResult.percentage = percentage;
       existingResult.isPassed = isPassed;

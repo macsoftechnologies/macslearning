@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min, Max, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateExamDto {
@@ -24,8 +24,13 @@ export class CreateExamDto {
 
   @IsNumber()
   @Min(1)
+  @Max(3)
   @IsOptional()
   maxAttempts?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isFinalExam?: boolean;
 }
 
 export class OptionDto {
@@ -61,6 +66,10 @@ export class QuestionDto {
   @Type(() => OptionDto)
   @IsOptional()
   options?: OptionDto[];
+
+  @IsString()
+  @IsOptional()
+  correctAnswer?: string;
 }
 
 export class UpdateQuestionDto extends QuestionDto {

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Thread, ThreadDocument } from './schemas/thread.schema';
 import { Reply, ReplyDocument } from './schemas/reply.schema';
+import { Course, CourseDocument } from '../courses/schemas/course.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class DiscussionService {
   constructor(
     @InjectModel(Thread.name) private threadModel: Model<ThreadDocument>,
     @InjectModel(Reply.name) private replyModel: Model<ReplyDocument>,
+    @InjectModel(Course.name) private courseModel: Model<CourseDocument>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -20,11 +22,33 @@ export class DiscussionService {
       courseId,
       authorId,
     });
-    return thread.save();
+    const saved = await thread.save();
+
+    // Notify instructors
+    try {
+      const course = await this.courseModel.findOne({ _id: courseId, organizationId }).lean();
+      if (course) {
+
+        // notify all co-instructors
+        if (course.instructorIds && course.instructorIds.length > 0) {
+          for (const instId of course.instructorIds) {
+            if (instId.toString() !== authorId.toString()) {
+              await this.notificationsService.createNotification(organizationId, instId.toString(), 'New Course Question', `A new question was asked in ${course.title}`, 'DISCUSSION', `/courses/${courseId}`);
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    return saved;
   }
 
-  async getThreads(organizationId: string, courseId: string) {
-    return this.threadModel.find({ organizationId, courseId, isDeleted: false })
+  async getThreads(organizationId: string, courseId: string, lessonId?: string) {
+    const query: any = { organizationId, courseId, isDeleted: false };
+    if (lessonId) {
+      query.lessonId = lessonId;
+    }
+    return this.threadModel.find(query)
       .sort({ createdAt: -1 })
       .populate('authorId', 'fullName email userType'); 
   }

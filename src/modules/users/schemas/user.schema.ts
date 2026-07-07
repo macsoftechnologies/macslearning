@@ -8,6 +8,9 @@ export class User {
   @Prop({ type: Types.ObjectId, ref: 'Organization', default: null })
   organizationId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Region', default: null })
+  regionId: Types.ObjectId;
+
   @Prop({ required: true, trim: true })
   fullName: string;
 
@@ -20,7 +23,7 @@ export class User {
   @Prop({ required: true, select: false })
   passwordHash: string;
 
-  @Prop({ required: true, enum: ['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT'] })
+  @Prop({ required: true, enum: ['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'] })
   userType: string;
 
   @Prop()

@@ -14,6 +14,9 @@ export class Organization {
   @Prop()
   logoUrl: string;
 
+  @Prop()
+  domain: string;
+
   @Prop({ type: Object })
   themeColors: Record<string, string>;
 
@@ -37,7 +40,7 @@ export class Organization {
   subscriptionConfig: {
     planId?: Types.ObjectId;
     planType?: string;
-    billingCycle?: string;
+    durationInDays?: number;
     maxStudents?: number;
     maxStorageGB?: number;
     expiresAt?: Date;
