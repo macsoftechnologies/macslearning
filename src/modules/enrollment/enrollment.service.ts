@@ -158,6 +158,11 @@ export class EnrollmentService {
     return {
       success: true,
       dummyPaymentId: paymentRecord ? paymentRecord.dummyPaymentId : null,
+      amount: paymentRecord ? paymentRecord.amount : null,
+      debug: {
+        regionId,
+        parsedPrices: course.regionalPrices,
+      },
       enrollment,
     };
   }
