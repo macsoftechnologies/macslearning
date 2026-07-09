@@ -104,7 +104,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ORG_USER')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   @ApiOperation({
     summary: 'Get all users in organization with pagination and search',
   })
