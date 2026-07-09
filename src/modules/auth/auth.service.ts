@@ -179,6 +179,7 @@ export class AuthService {
         email: user.email,
         userType: user.userType,
         organizationId: user.organizationId,
+        regionId: user.regionId,
         organizationCode: organizationCode?.toUpperCase(),
         organizationSlug,
         organizationLoginUrl,
