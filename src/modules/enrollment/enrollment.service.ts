@@ -62,17 +62,25 @@ export class EnrollmentService {
     if (
       isPaid &&
       regionId &&
-      course.regionalPrices &&
-      course.regionalPrices.length > 0
+      course.regionalPrices
     ) {
-      const rp = course.regionalPrices.find(
-        (p: any) =>
-          p.regionId === regionId ||
-          (p.regionId && p.regionId._id === regionId) ||
-          (p.regionId && p.regionId.id === regionId),
-      );
-      if (rp) {
-        amount = rp.price;
+      let parsedPrices = course.regionalPrices;
+      if (typeof parsedPrices === 'string') {
+        try {
+          parsedPrices = JSON.parse(parsedPrices);
+        } catch (e) {}
+      }
+      
+      if (Array.isArray(parsedPrices) && parsedPrices.length > 0) {
+        const rp = parsedPrices.find(
+          (p: any) =>
+            p.regionId === regionId ||
+            (p.regionId && p.regionId._id === regionId) ||
+            (p.regionId && p.regionId.id === regionId),
+        );
+        if (rp) {
+          amount = rp.price;
+        }
       }
     }
 
