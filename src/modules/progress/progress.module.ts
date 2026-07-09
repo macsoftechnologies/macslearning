@@ -1,21 +1,18 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProgressController } from './progress.controller';
 import { ProgressService } from './progress.service';
-import { LessonProgress, LessonProgressSchema } from './schemas/lessonProgress.schema';
-import { Lesson, LessonSchema } from '../content/schemas/lesson.schema';
+import { LessonProgress } from './entities/lessonProgress.entity';
+import { Lesson } from '../content/entities/lesson.entity';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 
 @Module({
   imports: [
     EnrollmentModule,
-    MongooseModule.forFeature([
-      { name: LessonProgress.name, schema: LessonProgressSchema },
-      { name: Lesson.name, schema: LessonSchema },
-    ])
+    TypeOrmModule.forFeature([LessonProgress, Lesson]),
   ],
   controllers: [ProgressController],
   providers: [ProgressService],
-  exports: [ProgressService]
+  exports: [ProgressService],
 })
 export class ProgressModule {}

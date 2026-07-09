@@ -15,12 +15,18 @@ export class FacultyController {
   @Get('dashboard-stats')
   @Roles('FACULTY')
   async getDashboardStats(@Request() req: any) {
-    return this.facultyService.getDashboardStats(req.user.organizationId, req.user.userId);
+    return this.facultyService.getDashboardStats(
+      req.user.organizationId,
+      req.user.userId,
+    );
   }
 
   @Get('grading-queue')
   @Roles('FACULTY')
   async getGradingQueue(@Request() req: any) {
-    return this.facultyService.getGradingQueue(req.user.organizationId, req.user.userId);
+    return this.facultyService.getGradingQueue(
+      req.user.organizationId,
+      req.user.userId,
+    );
   }
 }

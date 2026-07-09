@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
 
 import { AppController } from './app.controller';
@@ -33,10 +33,17 @@ import { FacultyModule } from './modules/faculty/faculty.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    MongooseModule.forRootAsync({
+    TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
+        type: 'mysql',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD') || '',
+        database: configService.get<string>('DB_DATABASE'),
+        autoLoadEntities: true,
+        synchronize: true, // Only for dev. Set to false in prod and use migrations.
       }),
       inject: [ConfigService],
     }),
@@ -47,7 +54,27 @@ import { FacultyModule } from './modules/faculty/faculty.module';
       }),
       inject: [ConfigService],
     }),
-    AuthModule, UsersModule, OrganizationsModule, StudentsModule, CoursesModule, EnrollmentModule, PaymentModule, ExamsModule, ResultsModule, CertificatesModule, NotificationsModule, ReportsModule, ContentModule, ProgressModule, AssignmentsModule, DiscussionModule, AuditModule, CategoryModule, SubscriptionPlansModule, RegionsModule, FacultyModule
+    AuthModule,
+    UsersModule,
+    OrganizationsModule,
+    StudentsModule,
+    CoursesModule,
+    EnrollmentModule,
+    PaymentModule,
+    ExamsModule,
+    ResultsModule,
+    CertificatesModule,
+    NotificationsModule,
+    ReportsModule,
+    ContentModule,
+    ProgressModule,
+    AssignmentsModule,
+    DiscussionModule,
+    AuditModule,
+    CategoryModule,
+    SubscriptionPlansModule,
+    RegionsModule,
+    FacultyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

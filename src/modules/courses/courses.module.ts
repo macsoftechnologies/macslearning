@@ -1,8 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { CoursesController } from './courses.controller';
 import { CoursesService } from './courses.service';
-import { Course, CourseSchema } from './schemas/course.schema';
+import { Course } from './entities/course.entity';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
@@ -10,14 +10,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Course.name, schema: CourseSchema }]),
+    TypeOrmModule.forFeature([Course]),
     forwardRef(() => EnrollmentModule),
     OrganizationsModule,
     AuditModule,
-    NotificationsModule
+    NotificationsModule,
   ],
   controllers: [CoursesController],
   providers: [CoursesService],
-  exports: [CoursesService, MongooseModule],
+  exports: [CoursesService, TypeOrmModule],
 })
 export class CoursesModule {}

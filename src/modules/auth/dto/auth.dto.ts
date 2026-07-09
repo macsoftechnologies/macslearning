@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class ChangePasswordDto {
   @ApiProperty({ description: 'Current password', minLength: 6 })
@@ -25,7 +31,9 @@ export class LoginDto {
   @IsString()
   password: string;
 
-  @ApiPropertyOptional({ description: 'Organization code for organization login' })
+  @ApiPropertyOptional({
+    description: 'Organization code for organization login',
+  })
   @IsOptional()
   @IsString()
   organizationCode?: string;

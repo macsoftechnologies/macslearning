@@ -1,76 +1,87 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Category, CategoryDocument } from './schemas/category.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Category } from './entities/category.entity';
+import { Course } from '../courses/entities/course.entity';
 
 @Injectable()
 export class CategoryService {
   constructor(
-    @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
   ) {}
 
   async createCategory(organizationId: string, categoryData: any) {
-    const category = new this.categoryModel({
+    const category = this.categoryRepository.create({
       ...categoryData,
       organizationId,
     });
-    return category.save();
+    return this.categoryRepository.save(category);
   }
 
   async getCategories(organizationId: string) {
-    return this.categoryModel.aggregate([
-      { $match: { organizationId: new Types.ObjectId(organizationId), isDeleted: false } },
-      {
-        $lookup: {
-          from: 'courses',
-          let: { catIdStr: { $toString: '$_id' } },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$categoryId', '$$catIdStr'] } } }
-          ],
-          as: 'courses',
-        },
-      },
-      {
-        $addFields: {
-          courseCount: {
-            $size: {
-              $filter: {
-                input: '$courses',
-                as: 'c',
-                cond: { $eq: ['$$c.isDeleted', false] },
-              },
-            },
-          },
-          id: '$_id',
-        },
-      },
-      { $project: { courses: 0 } },
-      { $sort: { name: 1 } },
-    ]);
+    const categories = await this.categoryRepository
+      .createQueryBuilder('category')
+      .leftJoin(
+        Course,
+        'course',
+        'course.categoryId = category.id AND course.isDeleted = false',
+      )
+      .select([
+        'category.id AS id',
+        'category.name AS name',
+        'category.description AS description',
+        'category.organizationId AS organizationId',
+        'category.isDeleted AS isDeleted',
+        'category.createdAt AS createdAt',
+        'category.updatedAt AS updatedAt',
+      ])
+      .addSelect('COUNT(course.id)', 'courseCount')
+      .where('category.organizationId = :organizationId', { organizationId })
+      .andWhere('category.isDeleted = :isDeleted', { isDeleted: false })
+      .groupBy('category.id')
+      .orderBy('category.name', 'ASC')
+      .getRawMany();
+
+    // In TypeORM getRawMany returns courseCount as a string sometimes, ensure it's a number
+    return categories.map((c) => ({
+      ...c,
+      courseCount: parseInt(c.courseCount, 10) || 0,
+    }));
   }
 
   async getCategoryById(organizationId: string, categoryId: string) {
-    const category = await this.categoryModel.findOne({ _id: categoryId, organizationId, isDeleted: false });
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId, organizationId, isDeleted: false },
+    });
     if (!category) throw new NotFoundException('Category not found');
     return category;
   }
 
-  async updateCategory(organizationId: string, categoryId: string, updateData: any) {
-    const category = await this.categoryModel.findOneAndUpdate(
-      { _id: categoryId, organizationId, isDeleted: false },
-      { $set: updateData },
-      { new: true }
+  async updateCategory(
+    organizationId: string,
+    categoryId: string,
+    updateData: any,
+  ) {
+    await this.categoryRepository.update(
+      { id: categoryId, organizationId, isDeleted: false },
+      updateData,
     );
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId, organizationId, isDeleted: false },
+    });
     if (!category) throw new NotFoundException('Category not found');
     return category;
   }
 
   async deleteCategory(organizationId: string, categoryId: string) {
-    const category = await this.categoryModel.findOneAndUpdate(
-      { _id: categoryId, organizationId, isDeleted: false },
-      { $set: { isDeleted: true } },
-      { new: true }
+    await this.categoryRepository.update(
+      { id: categoryId, organizationId, isDeleted: false },
+      { isDeleted: true },
     );
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId, organizationId, isDeleted: true },
+    });
     if (!category) throw new NotFoundException('Category not found');
     return { message: 'Category deleted successfully' };
   }

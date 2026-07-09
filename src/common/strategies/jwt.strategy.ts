@@ -2,15 +2,16 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Organization, OrganizationDocument } from '../../modules/organizations/schemas/org.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Organization } from '../../modules/organizations/entities/org.entity';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
-    @InjectModel(Organization.name) private orgModel: Model<OrganizationDocument>
+    @InjectRepository(Organization)
+    private orgRepository: Repository<Organization>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -25,7 +26,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     if (payload.organizationId) {
-      const org = await this.orgModel.findById(payload.organizationId);
+      const org = await this.orgRepository.findOne({
+        where: { id: payload.organizationId },
+      });
       if (!org || org.status !== 'ACTIVE' || org.isDeleted) {
         throw new UnauthorizedException('Organization is disabled');
       }

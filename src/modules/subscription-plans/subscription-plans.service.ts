@@ -1,31 +1,35 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { SubscriptionPlan, SubscriptionPlanDocument } from './schemas/subscription-plan.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { SubscriptionPlan } from './entities/subscription-plan.entity';
 
 @Injectable()
 export class SubscriptionPlansService {
   constructor(
-    @InjectModel(SubscriptionPlan.name)
-    private subscriptionPlanModel: Model<SubscriptionPlanDocument>,
+    @InjectRepository(SubscriptionPlan)
+    private subscriptionPlanRepository: Repository<SubscriptionPlan>,
   ) {}
 
   async createSubscriptionPlan(planData: any) {
-    const plan = await this.subscriptionPlanModel.create({
+    const plan = this.subscriptionPlanRepository.create({
       ...planData,
       isActive: planData.isActive ?? true,
       isDeleted: false,
     });
-
-    return plan;
+    return this.subscriptionPlanRepository.save(plan);
   }
 
   async getSubscriptionPlans() {
-    return this.subscriptionPlanModel.find({ isDeleted: false }).sort({ createdAt: -1 });
+    return this.subscriptionPlanRepository.find({
+      where: { isDeleted: false },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async getSubscriptionPlanById(planId: string) {
-    const plan = await this.subscriptionPlanModel.findById(planId);
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId },
+    });
     if (!plan || plan.isDeleted) {
       throw new NotFoundException('Subscription plan not found');
     }
@@ -33,11 +37,13 @@ export class SubscriptionPlansService {
   }
 
   async updateSubscriptionPlan(planId: string, updateData: any) {
-    const plan = await this.subscriptionPlanModel.findOneAndUpdate(
-      { _id: planId, isDeleted: false },
-      { $set: updateData },
-      { new: true },
+    await this.subscriptionPlanRepository.update(
+      { id: planId, isDeleted: false },
+      updateData,
     );
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId, isDeleted: false },
+    });
 
     if (!plan) {
       throw new NotFoundException('Subscription plan not found');
@@ -47,15 +53,18 @@ export class SubscriptionPlansService {
   }
 
   async deleteSubscriptionPlan(planId: string) {
-    const plan = await this.subscriptionPlanModel.findOneAndUpdate(
-      { _id: planId, isDeleted: false },
-      { $set: { isDeleted: true } },
-      { new: true },
-    );
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId, isDeleted: false },
+    });
 
     if (!plan) {
       throw new NotFoundException('Subscription plan not found');
     }
+
+    await this.subscriptionPlanRepository.update(
+      { id: planId },
+      { isDeleted: true },
+    );
 
     return { message: 'Subscription plan deleted successfully' };
   }

@@ -11,22 +11,37 @@ export class ResultsController {
 
   @Get('student')
   async getMyResults(@Request() req: any) {
-    return this.resultsService.getMyResults(req.user.organizationId, req.user.userId);
+    return this.resultsService.getMyResults(
+      req.user.organizationId,
+      req.user.userId,
+    );
   }
 
   @Get('student/attempts')
   async getMyAttempts(@Request() req: any) {
-    return this.resultsService.getMyAttempts(req.user.organizationId, req.user.userId);
+    return this.resultsService.getMyAttempts(
+      req.user.organizationId,
+      req.user.userId,
+    );
   }
 
   @Get('student/video-quizzes')
   async getMyVideoQuizAnswers(@Request() req: any) {
-    return this.resultsService.getMyVideoQuizAnswers(req.user.organizationId, req.user.userId);
+    return this.resultsService.getMyVideoQuizAnswers(
+      req.user.organizationId,
+      req.user.userId,
+    );
   }
 
   @Get('courses/:courseId')
   @Roles('ORG_USER')
-  async getCourseResults(@Request() req: any, @Param('courseId') courseId: string) {
-    return this.resultsService.getCourseResults(req.user.organizationId, courseId);
+  async getCourseResults(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.resultsService.getCourseResults(
+      req.user.organizationId,
+      courseId,
+    );
   }
 }

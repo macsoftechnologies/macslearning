@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({ description: 'User email address' })
@@ -17,12 +23,18 @@ export class CreateUserDto {
   @IsNotEmpty()
   fullName: string;
 
-  @ApiPropertyOptional({ description: 'User role type', enum: ['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'] })
+  @ApiPropertyOptional({
+    description: 'User role type',
+    enum: ['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'],
+  })
   @IsEnum(['SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT', 'FINANCE'])
   @IsOptional()
   userType?: string;
 
-  @ApiPropertyOptional({ description: 'Organization ID for SUPER_ADMIN when creating users across organizations' })
+  @ApiPropertyOptional({
+    description:
+      'Organization ID for SUPER_ADMIN when creating users across organizations',
+  })
   @IsString()
   @IsOptional()
   organizationId?: string;
@@ -32,7 +44,9 @@ export class CreateUserDto {
   @IsOptional()
   mobile?: string;
 
-  @ApiPropertyOptional({ description: 'Array of permissions assigned to this user' })
+  @ApiPropertyOptional({
+    description: 'Array of permissions assigned to this user',
+  })
   @IsOptional()
   modulePermissions?: string[];
 }
@@ -58,7 +72,10 @@ export class CreateSuperAdminTeamDto {
   @IsOptional()
   mobile?: string;
 
-  @ApiProperty({ description: 'Array of permissions assigned to this Super Admin team member' })
+  @ApiProperty({
+    description:
+      'Array of permissions assigned to this Super Admin team member',
+  })
   @IsOptional()
   modulePermissions?: string[];
 }
@@ -111,13 +128,18 @@ export class UpdateUserDto {
   @IsOptional()
   regionId?: string;
 
-  @ApiPropertyOptional({ description: 'Array of permissions assigned to this user' })
+  @ApiPropertyOptional({
+    description: 'Array of permissions assigned to this user',
+  })
   @IsOptional()
   modulePermissions?: string[];
 }
 
 export class UpdateUserStatusDto {
-  @ApiProperty({ description: 'New status for the user', enum: ['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING', 'REJECTED'] })
+  @ApiProperty({
+    description: 'New status for the user',
+    enum: ['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING', 'REJECTED'],
+  })
   @IsEnum(['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING', 'REJECTED'])
   status: string;
 }

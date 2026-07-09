@@ -1,4 +1,10 @@
-import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect, ConnectedSocket } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  ConnectedSocket,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
@@ -10,7 +16,9 @@ import { ConfigService } from '@nestjs/config';
   },
 })
 @Injectable()
-export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class NotificationsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -21,14 +29,16 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   async handleConnection(@ConnectedSocket() client: Socket) {
     try {
-      const token = client.handshake.auth.token || client.handshake.headers['authorization']?.split(' ')[1];
+      const token =
+        client.handshake.auth.token ||
+        client.handshake.headers['authorization']?.split(' ')[1];
       if (!token) {
         client.disconnect();
         return;
       }
       const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
       const payload: any = jwt.verify(token, secret as string);
-      
+
       const userId = payload.userId;
       if (userId) {
         this.connectedUsers.set(userId, client.id);

@@ -15,7 +15,7 @@ export class AuditController {
     @Request() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('organizationId') orgIdFromQuery?: string
+    @Query('organizationId') orgIdFromQuery?: string,
   ) {
     let organizationId = orgIdFromQuery;
     if (req.user.userType === 'ORG_USER') {

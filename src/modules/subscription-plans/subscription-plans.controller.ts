@@ -1,9 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CreateSubscriptionPlanDto, UpdateSubscriptionPlanDto } from './dto/subscription-plan.dto';
+import {
+  CreateSubscriptionPlanDto,
+  UpdateSubscriptionPlanDto,
+} from './dto/subscription-plan.dto';
 import { SubscriptionPlansService } from './subscription-plans.service';
 
 @ApiTags('Subscription Plans')
@@ -11,7 +23,9 @@ import { SubscriptionPlansService } from './subscription-plans.service';
 @Controller('subscription-plans')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SubscriptionPlansController {
-  constructor(private readonly subscriptionPlansService: SubscriptionPlansService) {}
+  constructor(
+    private readonly subscriptionPlansService: SubscriptionPlansService,
+  ) {}
 
   @Post()
   @Roles('SUPER_ADMIN')
@@ -33,8 +47,14 @@ export class SubscriptionPlansController {
 
   @Patch(':id')
   @Roles('SUPER_ADMIN')
-  async updateSubscriptionPlan(@Param('id') planId: string, @Body() updateData: UpdateSubscriptionPlanDto) {
-    return this.subscriptionPlansService.updateSubscriptionPlan(planId, updateData);
+  async updateSubscriptionPlan(
+    @Param('id') planId: string,
+    @Body() updateData: UpdateSubscriptionPlanDto,
+  ) {
+    return this.subscriptionPlansService.updateSubscriptionPlan(
+      planId,
+      updateData,
+    );
   }
 
   @Delete(':id')

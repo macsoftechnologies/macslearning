@@ -1,8 +1,8 @@
 import { Processor, Process } from '@nestjs/bull';
 import type { Job } from 'bull';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Notification, NotificationDocument } from './schemas/notification.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Notification } from './entities/notification.entity';
 import { NotificationsGateway } from './notifications.gateway';
 import { Logger } from '@nestjs/common';
 
@@ -11,8 +11,9 @@ export class NotificationsProcessor {
   private readonly logger = new Logger(NotificationsProcessor.name);
 
   constructor(
-    @InjectModel(Notification.name) private notificationModel: Model<NotificationDocument>,
-    private readonly gateway: NotificationsGateway
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
+    private readonly gateway: NotificationsGateway,
   ) {}
 
   @Process('send_notification')
@@ -21,16 +22,17 @@ export class NotificationsProcessor {
     const { organizationId, userId, title, message, type, link } = job.data;
 
     // Save to DB
-    const notification = new this.notificationModel({
+    const notification = this.notificationRepository.create({
       organizationId,
       userId,
       title,
       message,
       type,
       link,
-      isRead: false
+      isRead: false,
     });
-    const savedNotification = await notification.save();
+    const savedNotification =
+      await this.notificationRepository.save(notification);
 
     // Emit via WebSocket
     this.gateway.sendNotification(userId, savedNotification);

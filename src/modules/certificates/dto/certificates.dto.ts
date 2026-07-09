@@ -1,4 +1,13 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested, IsArray } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GenerateCertificateDto {
@@ -61,6 +70,10 @@ export class TemplateFieldDto {
   @IsString()
   @IsOptional()
   textAlign?: string;
+
+  @IsNumber()
+  @IsOptional()
+  opacity?: number;
 }
 
 export class CreateCertificateTemplateDto {

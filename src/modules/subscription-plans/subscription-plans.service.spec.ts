@@ -54,8 +54,8 @@ describe('SubscriptionPlansService', () => {
   it('throws when updating a non-existent plan', async () => {
     model.findOneAndUpdate.mockResolvedValue(null);
 
-    await expect(service.updateSubscriptionPlan('missing-id', { name: 'Pro' })).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.updateSubscriptionPlan('missing-id', { name: 'Pro' }),
+    ).rejects.toThrow(NotFoundException);
   });
 });

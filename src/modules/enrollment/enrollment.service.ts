@@ -1,40 +1,72 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { v4 as uuidv4 } from 'uuid';
-import { Payment, PaymentDocument } from '../payment/schemas/payment.schema';
-import { Enrollment, EnrollmentDocument } from './schemas/enrollment.schema';
-import { Course, CourseDocument } from '../courses/schemas/course.schema';
+import { Payment } from '../payment/entities/payment.entity';
+import { Enrollment } from './entities/enrollment.entity';
+import { Course } from '../courses/entities/course.entity';
+import { Lesson } from '../content/entities/lesson.entity';
+import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class EnrollmentService {
   constructor(
-    @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
-    @InjectModel(Enrollment.name) private enrollmentModel: Model<EnrollmentDocument>,
-    @InjectModel(Course.name) private courseModel: Model<CourseDocument>,
+    @InjectRepository(Payment) private paymentRepository: Repository<Payment>,
+    @InjectRepository(Enrollment)
+    private enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(Course) private courseRepository: Repository<Course>,
+    @InjectRepository(Lesson) private lessonRepository: Repository<Lesson>,
+    @InjectRepository(LessonProgress)
+    private lessonProgressRepository: Repository<LessonProgress>,
     private notificationsService: NotificationsService,
   ) {}
 
-  async enrollStudent(studentId: string, organizationId: string, courseId: string, regionId?: string) {
-    const course = await this.courseModel.findOne({ _id: courseId, organizationId });
+  async enrollStudent(
+    studentId: string,
+    organizationId: string,
+    courseId: string,
+    regionId?: string,
+  ) {
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId, organizationId },
+    });
     if (!course) {
       throw new NotFoundException('Course not found');
     }
 
-    const existingEnrollment = await this.enrollmentModel.findOne({ organizationId, studentId, courseId, status: 'ACTIVE' });
+    const existingEnrollment = await this.enrollmentRepository.findOne({
+      where: { organizationId, studentId, courseId, status: 'ACTIVE' },
+    });
     if (existingEnrollment) {
       throw new BadRequestException('You are already enrolled in this course');
     }
 
-    const isPaid = course.pricing?.isPaid || false;
-    let amount = course.pricing?.amount || 0;
+    let isPaid = false;
+    let amount = 0;
 
-    if (isPaid && regionId && course.regionalPrices && course.regionalPrices.length > 0) {
+    // In MySQL, course.pricing might be a JSON object
+    const pricing = course.pricing;
+    if (pricing) {
+      isPaid = pricing.isPaid || false;
+      amount = pricing.amount || 0;
+    }
+
+    if (
+      isPaid &&
+      regionId &&
+      course.regionalPrices &&
+      course.regionalPrices.length > 0
+    ) {
       const rp = course.regionalPrices.find(
-        (p) => p.regionId?.toString() === regionId.toString()
+        (p: any) => p.regionId === regionId,
       );
       if (rp) {
         amount = rp.price;
@@ -45,8 +77,8 @@ export class EnrollmentService {
 
     if (isPaid) {
       const dummyPaymentId = `DUMMY-${uuidv4()}`;
-      
-      paymentRecord = await this.paymentModel.create({
+
+      const payment = this.paymentRepository.create({
         organizationId,
         studentId,
         courseId,
@@ -57,26 +89,31 @@ export class EnrollmentService {
         paidAt: new Date(),
         createdBy: studentId,
       });
+      paymentRecord = await this.paymentRepository.save(payment);
     }
 
     let expiresAt: Date | undefined = undefined;
     if (course.validityDays && course.validityDays > 0) {
-      expiresAt = new Date(Date.now() + course.validityDays * 24 * 60 * 60 * 1000);
+      expiresAt = new Date(
+        Date.now() + course.validityDays * 24 * 60 * 60 * 1000,
+      );
     }
 
-    const enrollment = await this.enrollmentModel.create({
+    const enrollment = this.enrollmentRepository.create({
       organizationId,
       studentId,
       courseId,
       paymentStatus: isPaid ? 'PAID' : 'NOT_APPLICABLE',
       source: 'SELF_ENROLL',
-      paymentId: paymentRecord ? paymentRecord._id : undefined,
-      expiresAt
+      paymentId: paymentRecord ? paymentRecord.id : undefined,
+      expiresAt,
     });
 
-    await this.courseModel.updateOne(
-      { _id: courseId, organizationId },
-      { $inc: { enrolledCount: 1 } }
+    await this.enrollmentRepository.save(enrollment);
+
+    await this.courseRepository.update(
+      { id: courseId, organizationId },
+      { enrolledCount: (course.enrolledCount || 0) + 1 },
     );
 
     // Notify student of successful enrollment
@@ -87,7 +124,7 @@ export class EnrollmentService {
         'Enrolled in course',
         `You have been enrolled in course ${course.title || courseId}`,
         'ENROLLMENT',
-        `/courses/${courseId}`
+        `/courses/${courseId}`,
       );
     } catch (e) {
       // ignore notification errors
@@ -96,55 +133,67 @@ export class EnrollmentService {
     return {
       success: true,
       dummyPaymentId: paymentRecord ? paymentRecord.dummyPaymentId : null,
-      enrollment
+      enrollment,
     };
   }
 
-  async adminEnrollStudent(adminId: string, organizationId: string, enrollmentData: any) {
-    const course = await this.courseModel.findOne({ _id: enrollmentData.courseId, organizationId });
+  async adminEnrollStudent(
+    adminId: string,
+    organizationId: string,
+    enrollmentData: any,
+  ) {
+    const course = await this.courseRepository.findOne({
+      where: { id: enrollmentData.courseId, organizationId },
+    });
     if (!course) {
       throw new NotFoundException('Course not found');
     }
 
-    const existingEnrollment = await this.enrollmentModel.findOne({
-      organizationId,
-      studentId: enrollmentData.studentId,
-      courseId: enrollmentData.courseId,
-      status: 'ACTIVE',
+    const existingEnrollment = await this.enrollmentRepository.findOne({
+      where: {
+        organizationId,
+        studentId: enrollmentData.studentId,
+        courseId: enrollmentData.courseId,
+        status: 'ACTIVE',
+      },
     });
     if (existingEnrollment) {
-      throw new BadRequestException('Student is already actively enrolled in this course');
+      throw new BadRequestException(
+        'Student is already actively enrolled in this course',
+      );
     }
 
     let expiresAt: Date | undefined = undefined;
     if (course.validityDays && course.validityDays > 0) {
-      expiresAt = new Date(Date.now() + course.validityDays * 24 * 60 * 60 * 1000);
+      expiresAt = new Date(
+        Date.now() + course.validityDays * 24 * 60 * 60 * 1000,
+      );
     }
 
     const paymentStatus = enrollmentData.paymentStatus || 'NOT_APPLICABLE';
-    const enrollment = new this.enrollmentModel({
+    const enrollment = this.enrollmentRepository.create({
       ...enrollmentData,
       organizationId,
       source: 'ADMIN_ENROLL',
       paymentStatus,
       createdBy: adminId,
-      expiresAt
+      expiresAt,
     });
-    const saved = await enrollment.save();
+    const saved = await this.enrollmentRepository.save(enrollment as any);
 
-    await this.courseModel.updateOne(
-      { _id: enrollmentData.courseId, organizationId },
-      { $inc: { enrolledCount: 1 } }
+    await this.courseRepository.update(
+      { id: enrollmentData.courseId, organizationId },
+      { enrolledCount: (course.enrolledCount || 0) + 1 },
     );
 
     try {
       await this.notificationsService.createNotification(
         organizationId,
-        saved.studentId.toString(),
+        saved.studentId,
         'Enrolled by admin',
         `You have been enrolled in course ${saved.courseId} by admin`,
         'ENROLLMENT',
-        `/courses/${saved.courseId}`
+        `/courses/${saved.courseId}`,
       );
     } catch (e) {}
 
@@ -153,44 +202,65 @@ export class EnrollmentService {
 
   async getEnrollments(organizationId: string, queryDto: any) {
     const { page = 1, limit = 10, search } = queryDto;
-    const query: any = { organizationId };
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId });
+
     if (search) {
-      query.$or = [
-        { paymentStatus: { $regex: search, $options: 'i' } },
-        { source: { $regex: search, $options: 'i' } },
-      ];
+      queryBuilder.andWhere(
+        '(enrollment.paymentStatus LIKE :search OR enrollment.source LIKE :search)',
+        { search: `%${search}%` },
+      );
     }
 
-    const skip = (page - 1) * limit;
-    const [data, totalItems] = await Promise.all([
-      this.enrollmentModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      this.enrollmentModel.countDocuments(query),
-    ]);
+    const [data, totalItems] = await queryBuilder
+      .orderBy('enrollment.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
 
     if (data.length === 0) {
       return createPaginatedResponse(data, totalItems, page, limit);
     }
 
-    const courseIds = [...new Set(data.map((e: any) => e.courseId?.toString()))];
-    const studentIds = [...new Set(data.map((e: any) => e.studentId?.toString()))];
+    const courseIds = [...new Set(data.map((e: any) => e.courseId))];
+    const studentIds = [...new Set(data.map((e: any) => e.studentId))];
 
-    const lessons = await this.courseModel.db.collection('lessons').find({
-      courseId: { $in: courseIds },
-      organizationId: organizationId,
-      isDeleted: false
-    }).toArray();
+    const lessonsQuery = this.lessonRepository
+      .createQueryBuilder('lesson')
+      .where('lesson.organizationId = :organizationId', { organizationId })
+      .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (courseIds.length > 0) {
+      lessonsQuery.andWhere('lesson.courseId IN (:...courseIds)', {
+        courseIds,
+      });
+    }
+    const lessons = await lessonsQuery.getMany();
 
     const totalLessonsMap: Record<string, number> = {};
     for (const l of lessons) {
       totalLessonsMap[l.courseId] = (totalLessonsMap[l.courseId] || 0) + 1;
     }
 
-    const progresses = await this.courseModel.db.collection('lessonprogresses').find({
-      studentId: { $in: studentIds },
-      courseId: { $in: courseIds },
-      organizationId: organizationId,
-      isCompleted: true
-    }).toArray();
+    const progressesQuery = this.lessonProgressRepository
+      .createQueryBuilder('progress')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.isCompleted = :isCompleted', { isCompleted: true });
+
+    if (studentIds.length > 0) {
+      progressesQuery.andWhere('progress.studentId IN (:...studentIds)', {
+        studentIds,
+      });
+    }
+    if (courseIds.length > 0) {
+      progressesQuery.andWhere('progress.courseId IN (:...courseIds)', {
+        courseIds,
+      });
+    }
+    const progresses = await progressesQuery.getMany();
 
     const completedMap: Record<string, number> = {};
     for (const p of progresses) {
@@ -199,139 +269,213 @@ export class EnrollmentService {
     }
 
     const enrichedData = data.map((e: any) => {
-      const cId = e.courseId?.toString() || '';
-      const sId = e.studentId?.toString() || '';
+      const cId = e.courseId || '';
+      const sId = e.studentId || '';
       const total = totalLessonsMap[cId] || 0;
       const completed = completedMap[`${cId}_${sId}`] || 0;
       return {
         ...e,
-        progressPercentage: total === 0 ? 0 : Math.round((completed / total) * 100)
+        progressPercentage:
+          total === 0 ? 0 : Math.round((completed / total) * 100),
       };
     });
 
     return createPaginatedResponse(enrichedData, totalItems, page, limit);
   }
 
-  async updateEnrollmentStatus(enrollmentId: string, organizationId: string, status: string) {
-    const enrollment = await this.enrollmentModel.findOneAndUpdate(
-      { _id: enrollmentId, organizationId },
-      { $set: { status } },
-      { new: true }
+  async updateEnrollmentStatus(
+    enrollmentId: string,
+    organizationId: string,
+    status: string,
+  ) {
+    await this.enrollmentRepository.update(
+      { id: enrollmentId, organizationId },
+      { status },
     );
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: { id: enrollmentId, organizationId },
+    });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
 
     try {
       await this.notificationsService.createNotification(
         organizationId,
-        enrollment.studentId.toString(),
+        enrollment.studentId,
         'Enrollment status updated',
         `Your enrollment status for course ${enrollment.courseId} is now ${status}`,
         'ENROLLMENT',
-        `/courses/${enrollment.courseId}`
+        `/courses/${enrollment.courseId}`,
       );
     } catch (e) {}
     return enrollment;
   }
 
   async getCourseStudents(courseId: string, organizationId: string) {
-    const enrollments = await this.enrollmentModel
-      .find({ courseId, organizationId })
-      .populate('studentId', 'fullName email userType status')
-      .sort({ createdAt: -1 })
-      .lean();
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoin(User, 'student', 'student.id = enrollment.studentId')
+      .where('enrollment.courseId = :courseId', { courseId })
+      .andWhere('enrollment.organizationId = :organizationId', {
+        organizationId,
+      })
+      .select([
+        'enrollment.*',
+        'student.id as student_id',
+        'student.fullName as student_fullName',
+        'student.email as student_email',
+        'student.userType as student_userType',
+        'student.status as student_status',
+      ])
+      .orderBy('enrollment.createdAt', 'DESC')
+      .getRawMany();
 
-    const totalLessons = await this.courseModel.db.collection('lessons').countDocuments({ 
-      courseId: courseId, 
-      organizationId: organizationId,
-      isDeleted: false 
+    const mappedEnrollments = enrollments.map((e) => ({
+      ...e,
+      studentId: {
+        _id: e.student_id,
+        id: e.student_id,
+        fullName: e.student_fullName,
+        email: e.student_email,
+        userType: e.student_userType,
+        status: e.student_status,
+      },
+    }));
+
+    const totalLessons = await this.lessonRepository.count({
+      where: { courseId, organizationId, isDeleted: false },
     });
 
-    if (totalLessons === 0) return enrollments;
+    if (totalLessons === 0) return mappedEnrollments;
 
-    const progresses = await this.courseModel.db.collection('lessonprogresses').find({
-      courseId: courseId,
-      organizationId: organizationId,
-      isCompleted: true
-    }).toArray();
+    const progresses = await this.lessonProgressRepository.find({
+      where: { courseId, organizationId, isCompleted: true },
+    });
 
     const progressMap: Record<string, number> = {};
     for (const p of progresses) {
-      const sId = p.studentId.toString();
+      const sId = p.studentId;
       progressMap[sId] = (progressMap[sId] || 0) + 1;
     }
 
-    return enrollments.map(e => {
-      const studentId = e.studentId?._id?.toString() || e.studentId?.toString() || '';
+    return mappedEnrollments.map((e) => {
+      const studentId = e.studentId.id || '';
       const completed = progressMap[studentId] || 0;
       return {
         ...e,
-        progressPercentage: Math.round((completed / totalLessons) * 100)
+        progressPercentage: Math.round((completed / totalLessons) * 100),
       };
     });
   }
 
   async getStudentEnrollments(studentId: string, organizationId: string) {
-    const enrollments = await this.enrollmentModel
-      .find({ studentId, organizationId })
-      .populate('courseId', 'title description status pricing')
-      .sort({ createdAt: -1 })
-      .lean();
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoin(Course, 'course', 'course.id = enrollment.courseId')
+      .where('enrollment.studentId = :studentId', { studentId })
+      .andWhere('enrollment.organizationId = :organizationId', {
+        organizationId,
+      })
+      .select([
+        'enrollment.*',
+        'course.id as course_id',
+        'course.title as course_title',
+        'course.description as course_description',
+        'course.status as course_status',
+        'course.pricing as course_pricing',
+      ])
+      .orderBy('enrollment.createdAt', 'DESC')
+      .getRawMany();
 
-    if (enrollments.length === 0) return enrollments;
+    const mappedEnrollments = enrollments.map((e) => ({
+      ...e,
+      courseId: {
+        _id: e.course_id,
+        id: e.course_id,
+        title: e.course_title,
+        description: e.course_description,
+        status: e.course_status,
+        pricing: e.course_pricing,
+      },
+    }));
 
-    const courseIds = enrollments.map(e => e.courseId?._id?.toString() || e.courseId?.toString());
-    
-    const lessons = await this.courseModel.db.collection('lessons').find({
-      courseId: { $in: courseIds },
-      organizationId: organizationId,
-      isDeleted: false
-    }).toArray();
+    if (mappedEnrollments.length === 0) return mappedEnrollments;
+
+    const courseIds = mappedEnrollments.map((e) => e.courseId.id);
+
+    const lessonsQuery = this.lessonRepository
+      .createQueryBuilder('lesson')
+      .where('lesson.organizationId = :organizationId', { organizationId })
+      .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (courseIds.length > 0) {
+      lessonsQuery.andWhere('lesson.courseId IN (:...courseIds)', {
+        courseIds,
+      });
+    }
+    const lessons = await lessonsQuery.getMany();
 
     const totalLessonsMap: Record<string, number> = {};
     for (const l of lessons) {
       totalLessonsMap[l.courseId] = (totalLessonsMap[l.courseId] || 0) + 1;
     }
 
-    const progresses = await this.courseModel.db.collection('lessonprogresses').find({
-      studentId: studentId,
-      courseId: { $in: courseIds },
-      organizationId: organizationId,
-      isCompleted: true
-    }).toArray();
+    const progressesQuery = this.lessonProgressRepository
+      .createQueryBuilder('progress')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.studentId = :studentId', { studentId })
+      .andWhere('progress.isCompleted = :isCompleted', { isCompleted: true });
+
+    if (courseIds.length > 0) {
+      progressesQuery.andWhere('progress.courseId IN (:...courseIds)', {
+        courseIds,
+      });
+    }
+    const progresses = await progressesQuery.getMany();
 
     const completedMap: Record<string, number> = {};
     for (const p of progresses) {
       completedMap[p.courseId] = (completedMap[p.courseId] || 0) + 1;
     }
 
-    return enrollments.map(e => {
-      const cId = e.courseId?._id?.toString() || e.courseId?.toString() || '';
+    return mappedEnrollments.map((e) => {
+      const cId = e.courseId.id || '';
       const total = totalLessonsMap[cId] || 0;
       const completed = completedMap[cId] || 0;
       return {
         ...e,
-        progressPercentage: total === 0 ? 0 : Math.round((completed / total) * 100)
+        progressPercentage:
+          total === 0 ? 0 : Math.round((completed / total) * 100),
       };
     });
   }
 
-  async verifyActiveEnrollment(organizationId: string, studentId: string, courseId: string) {
-    const enrollment = await this.enrollmentModel.findOne({
-      organizationId,
-      studentId,
-      courseId,
-      status: 'ACTIVE',
+  async verifyActiveEnrollment(
+    organizationId: string,
+    studentId: string,
+    courseId: string,
+  ) {
+    const enrollment = await this.enrollmentRepository.findOne({
+      where: {
+        organizationId,
+        studentId,
+        courseId,
+        status: 'ACTIVE',
+      },
     });
     if (!enrollment) {
-      throw new BadRequestException('Active enrollment is required to access this course');
+      throw new BadRequestException(
+        'Active enrollment is required to access this course',
+      );
     }
-    
+
     if (enrollment.expiresAt && new Date() > enrollment.expiresAt) {
-      await this.enrollmentModel.updateOne({ _id: enrollment._id }, { $set: { status: 'EXPIRED' } });
+      await this.enrollmentRepository.update(
+        { id: enrollment.id },
+        { status: 'EXPIRED' },
+      );
       throw new BadRequestException('Your access to this course has expired');
     }
-    
+
     return enrollment;
   }
 }
-

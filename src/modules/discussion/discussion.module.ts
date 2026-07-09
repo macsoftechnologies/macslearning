@@ -1,25 +1,22 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { DiscussionController } from './discussion.controller';
 import { DiscussionService } from './discussion.service';
-import { Thread, ThreadSchema } from './schemas/thread.schema';
-import { Reply, ReplySchema } from './schemas/reply.schema';
+import { Thread } from './entities/thread.entity';
+import { Reply } from './entities/reply.entity';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CoursesModule } from '../courses/courses.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Thread.name, schema: ThreadSchema },
-      { name: Reply.name, schema: ReplySchema },
-    ]),
+    TypeOrmModule.forFeature([Thread, Reply]),
     NotificationsModule,
     EnrollmentModule,
     CoursesModule,
   ],
   controllers: [DiscussionController],
   providers: [DiscussionService],
-  exports: [DiscussionService, MongooseModule],
+  exports: [DiscussionService, TypeOrmModule],
 })
 export class DiscussionModule {}

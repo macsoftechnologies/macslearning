@@ -1,21 +1,33 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Assignment, AssignmentDocument } from './schemas/assignment.schema';
-import { Submission, SubmissionDocument } from './schemas/submission.schema';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Assignment } from './entities/assignment.entity';
+import { Submission } from './entities/submission.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AssignmentsService {
   constructor(
-    @InjectModel(Assignment.name) private assignmentModel: Model<AssignmentDocument>,
-    @InjectModel(Submission.name) private submissionModel: Model<SubmissionDocument>,
+    @InjectRepository(Assignment)
+    private assignmentRepository: Repository<Assignment>,
+    @InjectRepository(Submission)
+    private submissionRepository: Repository<Submission>,
     private notificationsService: NotificationsService,
     private auditService: AuditService,
   ) {}
 
-  async createAssignment(organizationId: string, courseId: string, createdBy: string, assignmentData: any) {
+  async createAssignment(
+    organizationId: string,
+    courseId: string,
+    createdBy: string,
+    assignmentData: any,
+  ) {
     const dueDate = new Date(assignmentData.dueDate);
     if (isNaN(dueDate.getTime())) {
       throw new BadRequestException('dueDate must be a valid date');
@@ -23,59 +35,104 @@ export class AssignmentsService {
     if (dueDate < new Date()) {
       throw new BadRequestException('dueDate must be in the future');
     }
-    if (typeof assignmentData.totalMarks !== 'number' || assignmentData.totalMarks <= 0) {
+    if (
+      typeof assignmentData.totalMarks !== 'number' ||
+      assignmentData.totalMarks <= 0
+    ) {
       throw new BadRequestException('totalMarks must be greater than 0');
     }
 
-    const assignment = new this.assignmentModel({
+    const assignment = this.assignmentRepository.create({
       ...assignmentData,
       dueDate,
       organizationId,
       courseId,
       createdBy,
     });
-    return assignment.save();
+    return this.assignmentRepository.save(assignment);
   }
 
   async getAssignments(organizationId: string, courseId: string) {
-    return this.assignmentModel.find({ organizationId, courseId, isDeleted: false }).sort({ createdAt: -1 });
+    return this.assignmentRepository.find({
+      where: { organizationId, courseId, isDeleted: false },
+      order: { createdAt: 'DESC' },
+    });
   }
 
-  async submitAssignment(organizationId: string, assignmentId: string, studentId: string, fileUrl: string) {
+  async submitAssignment(
+    organizationId: string,
+    assignmentId: string,
+    studentId: string,
+    fileUrl: string,
+  ) {
     if (!fileUrl) {
       throw new BadRequestException('Submission file is required');
     }
 
-    const assignment = await this.assignmentModel.findOne({ _id: assignmentId, organizationId, isDeleted: false });
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: assignmentId, organizationId, isDeleted: false },
+    });
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
     }
 
     const now = new Date();
-    const isLate = assignment.dueDate ? now > new Date(assignment.dueDate) : false;
+    const isLate = assignment.dueDate
+      ? now > new Date(assignment.dueDate)
+      : false;
 
-    const submission = await this.submissionModel.findOneAndUpdate(
-      { organizationId, assignmentId, studentId },
-      { $set: { fileUrl, status: 'PENDING', isLate } },
-      { new: true, upsert: true }
-    );
-    return submission;
+    let submission = await this.submissionRepository.findOne({
+      where: { organizationId, assignmentId, studentId },
+    });
+
+    if (submission) {
+      submission.fileUrl = fileUrl;
+      submission.status = 'PENDING';
+      submission.isLate = isLate;
+    } else {
+      submission = this.submissionRepository.create({
+        organizationId,
+        assignmentId,
+        studentId,
+        fileUrl,
+        status: 'PENDING',
+        isLate,
+      });
+    }
+
+    return this.submissionRepository.save(submission);
   }
 
-  async gradeSubmission(organizationId: string, submissionId: string, gradedBy: string, graderType: string, gradeData: any) {
+  async gradeSubmission(
+    organizationId: string,
+    submissionId: string,
+    gradedBy: string,
+    graderType: string,
+    gradeData: any,
+  ) {
     const { marksObtained, feedback, status } = gradeData;
-    const submission = await this.submissionModel.findOne({ _id: submissionId, organizationId });
+    const submission = await this.submissionRepository.findOne({
+      where: { id: submissionId, organizationId },
+    });
     if (!submission) {
       throw new NotFoundException('Submission not found');
     }
 
-    const assignment = await this.assignmentModel.findOne({ _id: submission.assignmentId, organizationId, isDeleted: false });
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: submission.assignmentId, organizationId, isDeleted: false },
+    });
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (typeof marksObtained !== 'number' || marksObtained < 0 || marksObtained > assignment.totalMarks) {
-      throw new BadRequestException('marksObtained must be between 0 and assignment total marks');
+    if (
+      typeof marksObtained !== 'number' ||
+      marksObtained < 0 ||
+      marksObtained > (assignment.totalMarks || 100)
+    ) {
+      throw new BadRequestException(
+        'marksObtained must be between 0 and assignment total marks',
+      );
     }
 
     submission.marksObtained = marksObtained;
@@ -84,20 +141,20 @@ export class AssignmentsService {
       throw new BadRequestException('Invalid submission grading status');
     }
     submission.status = status || 'GRADED';
-    submission.gradedBy = new Types.ObjectId(gradedBy);
+    submission.gradedBy = gradedBy;
     submission.gradedAt = new Date();
-    const savedSubmission = await submission.save();
+    const savedSubmission = await this.submissionRepository.save(submission);
 
     // If a faculty graded the submission, notify the student and record an audit entry
     try {
       if (graderType === 'FACULTY') {
         await this.notificationsService.createNotification(
           organizationId,
-          submission.studentId.toString(),
+          submission.studentId,
           'Assignment graded',
           `Your submission for assignment ${submission.assignmentId} was graded. Marks: ${marksObtained}`,
           'GRADING',
-          `/assignments/${submission.assignmentId}`
+          `/assignments/${submission.assignmentId}`,
         );
 
         await this.auditService.createLog({
@@ -105,25 +162,46 @@ export class AssignmentsService {
           actorId: gradedBy,
           action: 'grade_submission',
           targetId: submissionId,
-          metadata: { marksObtained, feedback }
+          metadata: { marksObtained, feedback },
         });
       }
     } catch (e) {
       // don't fail grading due to notification/audit errors
     }
 
-    return submission;
+    return savedSubmission;
   }
 
   async getAssignmentSubmissions(organizationId: string, assignmentId: string) {
-    return this.submissionModel
-      .find({ organizationId, assignmentId })
-      .populate('studentId', 'fullName email')
-      .sort({ submittedAt: -1 });
+    const submissions = await this.submissionRepository
+      .createQueryBuilder('sub')
+      .leftJoin(User, 'student', 'student.id = sub.studentId')
+      .where('sub.organizationId = :organizationId', { organizationId })
+      .andWhere('sub.assignmentId = :assignmentId', { assignmentId })
+      .select([
+        'sub.*',
+        'student.id as student_id',
+        'student.fullName as student_fullName',
+        'student.email as student_email',
+      ])
+      .orderBy('sub.createdAt', 'DESC')
+      .getRawMany();
+
+    return submissions.map((s) => ({
+      ...s,
+      studentId: {
+        _id: s.student_id,
+        id: s.student_id,
+        fullName: s.student_fullName,
+        email: s.student_email,
+      },
+    }));
   }
 
   async findAssignmentById(organizationId: string, assignmentId: string) {
-    const assignment = await this.assignmentModel.findOne({ _id: assignmentId, organizationId, isDeleted: false });
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: assignmentId, organizationId, isDeleted: false },
+    });
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
     }

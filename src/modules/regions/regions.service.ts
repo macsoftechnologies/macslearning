@@ -1,31 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateRegionDto } from './dto/create-region.dto';
 import { UpdateRegionDto } from './dto/update-region.dto';
-import { Region, RegionDocument } from './schemas/region.schema';
+import { Region } from './entities/region.entity';
 
 @Injectable()
 export class RegionsService {
   constructor(
-    @InjectModel(Region.name) private regionModel: Model<RegionDocument>,
+    @InjectRepository(Region) private regionRepository: Repository<Region>,
   ) {}
 
-  async create(createRegionDto: CreateRegionDto, orgId: string): Promise<Region> {
-    const createdRegion = new this.regionModel({
+  async create(
+    createRegionDto: CreateRegionDto,
+    orgId: string,
+  ): Promise<Region> {
+    const createdRegion = this.regionRepository.create({
       ...createRegionDto,
       orgId,
     });
-    return createdRegion.save();
+    return this.regionRepository.save(createdRegion);
   }
 
   async findAll(orgId?: string): Promise<Region[]> {
     const filter = orgId ? { orgId } : {};
-    return this.regionModel.find(filter).exec();
+    return this.regionRepository.find({ where: filter });
   }
 
   async findOne(id: string): Promise<Region> {
-    const region = await this.regionModel.findById(id).exec();
+    const region = await this.regionRepository.findOne({ where: { id } });
     if (!region) {
       throw new NotFoundException(`Region with ID ${id} not found`);
     }
@@ -33,10 +36,11 @@ export class RegionsService {
   }
 
   async update(id: string, updateRegionDto: UpdateRegionDto): Promise<Region> {
-    const updatedRegion = await this.regionModel
-      .findByIdAndUpdate(id, updateRegionDto, { new: true })
-      .exec();
-    
+    await this.regionRepository.update(id, updateRegionDto);
+    const updatedRegion = await this.regionRepository.findOne({
+      where: { id },
+    });
+
     if (!updatedRegion) {
       throw new NotFoundException(`Region with ID ${id} not found`);
     }
@@ -44,10 +48,11 @@ export class RegionsService {
   }
 
   async remove(id: string): Promise<Region> {
-    const deletedRegion = await this.regionModel.findByIdAndDelete(id).exec();
-    if (!deletedRegion) {
+    const region = await this.regionRepository.findOne({ where: { id } });
+    if (!region) {
       throw new NotFoundException(`Region with ID ${id} not found`);
     }
-    return deletedRegion;
+    await this.regionRepository.delete(id);
+    return region;
   }
 }

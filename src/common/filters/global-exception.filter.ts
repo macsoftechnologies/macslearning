@@ -1,4 +1,11 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, BadRequestException } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  BadRequestException,
+} from '@nestjs/common';
 import { Response } from 'express';
 
 @Catch()
@@ -6,7 +13,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    
+
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
 
@@ -16,19 +23,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
         message = (exceptionResponse as any).message || exceptionResponse;
       } else {
-        message = exceptionResponse as string;
+        message = exceptionResponse;
       }
     } else if (this.isMongoDuplicateKeyError(exception)) {
       status = HttpStatus.BAD_REQUEST;
       message = this.getDuplicateKeyMessage(exception as any);
     } else if (exception instanceof Error) {
-      message = 'Unexpected server error';
+      message = exception.toString();
     }
 
     response.status(status).json({
       statusCode: status,
       message: Array.isArray(message) ? message : [message],
-      error: status === HttpStatus.BAD_REQUEST ? 'Bad Request' : exception instanceof HttpException ? exception.name : 'Internal Server Error',
+      error:
+        status === HttpStatus.BAD_REQUEST
+          ? 'Bad Request'
+          : exception instanceof HttpException
+            ? exception.name
+            : 'Internal Server Error',
       timestamp: new Date().toISOString(),
     });
   }
@@ -47,21 +59,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const keyValue = exception.keyValue || {};
     const keys = Object.keys(keyValue);
     const field = keys[0] || this.parseIndexField(rawMessage);
-    const collectionName = exception.collection?.name || this.parseCollectionName(rawMessage).toLowerCase();
+    const collectionName =
+      exception.collection?.name ||
+      this.parseCollectionName(rawMessage).toLowerCase();
 
     if (collectionName.includes('organization')) {
       if (/code/i.test(field)) return 'Organization code already exists';
       if (/name/i.test(field)) return 'Organization name already exists';
-      if (/email/i.test(field)) return 'Organization admin email already exists';
+      if (/email/i.test(field))
+        return 'Organization admin email already exists';
     }
 
     if (collectionName.includes('payment')) {
-      if (/dummyPaymentId/i.test(field)) return 'Payment dummyPaymentId already exists';
-      if (/invoiceNumber/i.test(field)) return 'Payment invoice number already exists';
+      if (/dummyPaymentId/i.test(field))
+        return 'Payment dummyPaymentId already exists';
+      if (/invoiceNumber/i.test(field))
+        return 'Payment invoice number already exists';
     }
 
     if (collectionName.includes('certificate')) {
-      if (/certificateNumber/i.test(field)) return 'Certificate number already exists';
+      if (/certificateNumber/i.test(field))
+        return 'Certificate number already exists';
       return 'Certificate for this student and course already exists';
     }
 

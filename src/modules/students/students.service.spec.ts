@@ -35,6 +35,8 @@ describe('StudentsService', () => {
   it('rejects approval attempts from a different organization', async () => {
     userModel.findOne.mockResolvedValue(null);
 
-    await expect(service.approveStudent('student-1', 'admin-1', 'org-b')).rejects.toThrow(NotFoundException);
+    await expect(
+      service.approveStudent('student-1', 'admin-1', 'org-b'),
+    ).rejects.toThrow(NotFoundException);
   });
 });

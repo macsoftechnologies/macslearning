@@ -1,36 +1,36 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
-import { CourseModule as CourseModuleModel, CourseModuleSchema } from './schemas/courseModule.schema';
-import { Lesson, LessonSchema } from './schemas/lesson.schema';
-import { LessonCheckpoint, LessonCheckpointSchema } from './schemas/lessonCheckpoint.schema';
-import { LessonCheckpointAnswer, LessonCheckpointAnswerSchema } from './schemas/lessonCheckpointAnswer.schema';
+import { CourseModule as CourseModuleModel } from './entities/courseModule.entity';
+import { Lesson } from './entities/lesson.entity';
+import { LessonCheckpoint } from './entities/lessonCheckpoint.entity';
+import { LessonCheckpointAnswer } from './entities/lessonCheckpointAnswer.entity';
 import { LessonCheckpointController } from '../content/lesson-checkpoint.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { LessonProgress, LessonProgressSchema } from '../progress/schemas/lessonProgress.schema';
+import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
-import { VideoQuiz, VideoQuizSchema } from './schemas/video-quiz.schema';
-import { VideoQuizAnswer, VideoQuizAnswerSchema } from './schemas/video-quiz-answer.schema';
-import { Course, CourseSchema } from '../courses/schemas/course.schema';
+import { VideoQuiz } from './entities/video-quiz.entity';
+import { VideoQuizAnswer } from './entities/video-quiz-answer.entity';
+import { Course } from '../courses/entities/course.entity';
 
 @Module({
   imports: [
     NotificationsModule,
     EnrollmentModule,
-    MongooseModule.forFeature([
-      { name: CourseModuleModel.name, schema: CourseModuleSchema },
-      { name: Lesson.name, schema: LessonSchema },
-      { name: LessonCheckpoint.name, schema: LessonCheckpointSchema },
-      { name: LessonCheckpointAnswer.name, schema: LessonCheckpointAnswerSchema },
-      { name: LessonProgress.name, schema: LessonProgressSchema },
-      { name: VideoQuiz.name, schema: VideoQuizSchema },
-      { name: VideoQuizAnswer.name, schema: VideoQuizAnswerSchema },
-      { name: Course.name, schema: CourseSchema },
-    ])
+    TypeOrmModule.forFeature([
+      CourseModuleModel,
+      Lesson,
+      LessonCheckpoint,
+      LessonCheckpointAnswer,
+      LessonProgress,
+      VideoQuiz,
+      VideoQuizAnswer,
+      Course,
+    ]),
   ],
   controllers: [ContentController, LessonCheckpointController],
   providers: [ContentService],
-  exports: [ContentService, MongooseModule],
+  exports: [ContentService, TypeOrmModule],
 })
 export class ContentModule {}

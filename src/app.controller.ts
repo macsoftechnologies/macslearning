@@ -1,4 +1,12 @@
-import { BadRequestException, Controller, Get, Post, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Post,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -19,7 +27,7 @@ const storage = diskStorage({
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, `thumb-${uniqueSuffix}${extname(file.originalname)}`);
-  }
+  },
 });
 
 @Controller()
@@ -34,20 +42,32 @@ export class AppController {
   @Post('upload')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ORG_USER', 'FACULTY')
-  @UseInterceptors(FileInterceptor('file', {
-    storage,
-    limits: {
-      fileSize: 5 * 1024 * 1024,
-    },
-    fileFilter: (req, file, cb) => {
-      const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.doc', '.docx', '.zip'];
-      const ext = extname(file.originalname).toLowerCase();
-      if (!allowed.includes(ext)) {
-        return cb(new BadRequestException('Unsupported file type'), false);
-      }
-      cb(null, true);
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage,
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+      fileFilter: (req, file, cb) => {
+        const allowed = [
+          '.jpg',
+          '.jpeg',
+          '.png',
+          '.gif',
+          '.webp',
+          '.pdf',
+          '.doc',
+          '.docx',
+          '.zip',
+        ];
+        const ext = extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) {
+          return cb(new BadRequestException('Unsupported file type'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
   uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('File is required');

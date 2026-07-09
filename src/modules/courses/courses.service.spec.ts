@@ -11,7 +11,7 @@ describe('CoursesService', () => {
     }));
     courseModel.findOne = jest.fn();
 
-    service = new CoursesService(courseModel as any);
+    service = new CoursesService(courseModel);
   });
 
   it('generates a non-empty slug for a new course', async () => {

@@ -1,64 +1,119 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { LessonProgress, LessonProgressDocument } from './schemas/lessonProgress.schema';
-import { Lesson, LessonDocument } from '../content/schemas/lesson.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { LessonProgress } from './entities/lessonProgress.entity';
+import { Lesson } from '../content/entities/lesson.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class ProgressService {
   constructor(
-    @InjectModel(LessonProgress.name) private progressModel: Model<LessonProgressDocument>,
-    @InjectModel(Lesson.name) private lessonModel: Model<LessonDocument>,
+    @InjectRepository(LessonProgress)
+    private progressRepository: Repository<LessonProgress>,
+    @InjectRepository(Lesson) private lessonRepository: Repository<Lesson>,
   ) {}
 
-  async markLessonComplete(organizationId: string, studentId: string, courseId: string, moduleId: string, lessonId: string) {
-    const lesson = await this.lessonModel.findOne({ _id: lessonId, courseId, moduleId, organizationId, isDeleted: false });
+  async markLessonComplete(
+    organizationId: string,
+    studentId: string,
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+  ) {
+    const lesson = await this.lessonRepository.findOne({
+      where: {
+        id: lessonId,
+        courseId,
+        moduleId,
+        organizationId,
+        isDeleted: false,
+      },
+    });
     if (!lesson) {
-      throw new NotFoundException('Lesson not found for provided course/module');
+      throw new NotFoundException(
+        'Lesson not found for provided course/module',
+      );
     }
-    if (lesson.courseId.toString() !== courseId || lesson.moduleId?.toString() !== moduleId) {
-      throw new NotFoundException('Lesson does not belong to provided course/module');
+    if (lesson.courseId !== courseId || lesson.moduleId !== moduleId) {
+      throw new NotFoundException(
+        'Lesson does not belong to provided course/module',
+      );
     }
 
-    const progress = await this.progressModel.findOneAndUpdate(
-      { organizationId, studentId, courseId, lessonId },
-      { 
-        $set: { 
-          isCompleted: true, 
-          completedAt: new Date(), 
-          moduleId,
-          lastAccessedAt: new Date()
-        } 
-      },
-      { new: true, upsert: true }
-    );
-    return progress;
+    let progress = await this.progressRepository.findOne({
+      where: { organizationId, studentId, courseId, lessonId },
+    });
+
+    if (progress) {
+      progress.isCompleted = true;
+      progress.completedAt = new Date();
+      progress.moduleId = moduleId;
+      progress.lastAccessedAt = new Date();
+    } else {
+      progress = this.progressRepository.create({
+        organizationId,
+        studentId,
+        courseId,
+        moduleId,
+        lessonId,
+        isCompleted: true,
+        completedAt: new Date(),
+        lastAccessedAt: new Date(),
+      });
+    }
+
+    return this.progressRepository.save(progress);
   }
 
-  async updateWatchTime(organizationId: string, studentId: string, courseId: string, moduleId: string, lessonId: string, watchedSeconds: number) {
-    return this.progressModel.findOneAndUpdate(
-      { organizationId, studentId, courseId, lessonId },
-      { 
-        $set: { 
-          watchedSeconds, 
-          moduleId,
-          lastAccessedAt: new Date()
-        } 
-      },
-      { new: true, upsert: true }
-    );
+  async updateWatchTime(
+    organizationId: string,
+    studentId: string,
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+    watchedSeconds: number,
+  ) {
+    let progress = await this.progressRepository.findOne({
+      where: { organizationId, studentId, courseId, lessonId },
+    });
+
+    if (progress) {
+      progress.watchedSeconds = watchedSeconds;
+      progress.moduleId = moduleId;
+      progress.lastAccessedAt = new Date();
+    } else {
+      progress = this.progressRepository.create({
+        organizationId,
+        studentId,
+        courseId,
+        moduleId,
+        lessonId,
+        watchedSeconds,
+        lastAccessedAt: new Date(),
+      });
+    }
+
+    return this.progressRepository.save(progress);
   }
 
-  async getCourseProgress(organizationId: string, studentId: string, courseId: string) {
-    const progressList = await this.progressModel.find({
-      organizationId,
-      studentId,
-      courseId,
-    }).lean();
+  async getCourseProgress(
+    organizationId: string,
+    studentId: string,
+    courseId: string,
+  ) {
+    const progressList = await this.progressRepository.find({
+      where: {
+        organizationId,
+        studentId,
+        courseId,
+      },
+    });
 
-    const totalLessons = await this.lessonModel.countDocuments({ courseId, organizationId, isDeleted: false });
-    const completedCount = progressList.filter(p => p.isCompleted).length;
-    
+    const totalLessons = await this.lessonRepository.count({
+      where: { courseId, organizationId, isDeleted: false },
+    });
+    const completedCount = progressList.filter((p) => p.isCompleted).length;
+
     let progressPercentage = 0;
     if (totalLessons > 0) {
       progressPercentage = Math.round((completedCount / totalLessons) * 100);
@@ -66,22 +121,91 @@ export class ProgressService {
 
     return {
       progressPercentage,
-      completedLessonIds: progressList.filter(p => p.isCompleted).map(p => p.lessonId),
-      completedLessons: progressList
+      completedLessonIds: progressList
+        .filter((p) => p.isCompleted)
+        .map((p) => p.lessonId),
+      completedLessons: progressList,
     };
   }
 
-  async getAllStudentProgressForCourse(organizationId: string, courseId: string) {
-    return this.progressModel.find({ organizationId, courseId }).populate('studentId', 'fullName email');
+  async getAllStudentProgressForCourse(
+    organizationId: string,
+    courseId: string,
+  ) {
+    const progresses = await this.progressRepository
+      .createQueryBuilder('progress')
+      .leftJoin(User, 'student', 'student.id = progress.studentId')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.courseId = :courseId', { courseId })
+      .select([
+        'progress.*',
+        'student.id as student_id',
+        'student.fullName as student_fullName',
+        'student.email as student_email',
+      ])
+      .getRawMany();
+
+    return progresses.map((p) => ({
+      ...p,
+      studentId: {
+        _id: p.student_id,
+        id: p.student_id,
+        fullName: p.student_fullName,
+        email: p.student_email,
+      },
+    }));
   }
 
-  async getStudentProgressDetail(organizationId: string, courseId: string, studentId: string) {
-    return this.progressModel.find({ organizationId, courseId, studentId }).populate('lessonId', 'title type');
+  async getStudentProgressDetail(
+    organizationId: string,
+    courseId: string,
+    studentId: string,
+  ) {
+    const progresses = await this.progressRepository
+      .createQueryBuilder('progress')
+      .leftJoin(Lesson, 'lesson', 'lesson.id = progress.lessonId')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.courseId = :courseId', { courseId })
+      .andWhere('progress.studentId = :studentId', { studentId })
+      .select([
+        'progress.*',
+        'lesson.id as lesson_id',
+        'lesson.title as lesson_title',
+        'lesson.type as lesson_type',
+      ])
+      .getRawMany();
+
+    return progresses.map((p) => ({
+      ...p,
+      lessonId: {
+        _id: p.lesson_id,
+        id: p.lesson_id,
+        title: p.lesson_title,
+        type: p.lesson_type,
+      },
+    }));
   }
 
-  async hasPassedCheckpoint(organizationId: string, studentId: string, lessonId: string, checkpointId: string) {
-    const progress = await this.progressModel.findOne({ organizationId, studentId, lessonId });
+  async hasPassedCheckpoint(
+    organizationId: string,
+    studentId: string,
+    lessonId: string,
+    checkpointId: string,
+  ) {
+    const progress = await this.progressRepository.findOne({
+      where: { organizationId, studentId, lessonId },
+    });
     if (!progress) return false;
-    return (progress.checkpointPassedIds || []).some(id => id.toString() === checkpointId.toString());
+
+    let passedIds: any[] = progress.checkpointPassedIds || [];
+    if (typeof passedIds === 'string') {
+      try {
+        passedIds = JSON.parse(passedIds);
+      } catch (e) {
+        passedIds = [];
+      }
+    }
+
+    return passedIds.some((id: any) => String(id) === String(checkpointId));
   }
 }

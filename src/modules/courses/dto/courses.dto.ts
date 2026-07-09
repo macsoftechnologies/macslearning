@@ -1,4 +1,14 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested, IsObject, IsArray } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsObject,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PricingDto {

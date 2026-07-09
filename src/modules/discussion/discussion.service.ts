@@ -1,39 +1,61 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Thread, ThreadDocument } from './schemas/thread.schema';
-import { Reply, ReplyDocument } from './schemas/reply.schema';
-import { Course, CourseDocument } from '../courses/schemas/course.schema';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Thread } from './entities/thread.entity';
+import { Reply } from './entities/reply.entity';
+import { Course } from '../courses/entities/course.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class DiscussionService {
   constructor(
-    @InjectModel(Thread.name) private threadModel: Model<ThreadDocument>,
-    @InjectModel(Reply.name) private replyModel: Model<ReplyDocument>,
-    @InjectModel(Course.name) private courseModel: Model<CourseDocument>,
+    @InjectRepository(Thread) private threadRepository: Repository<Thread>,
+    @InjectRepository(Reply) private replyRepository: Repository<Reply>,
+    @InjectRepository(Course) private courseRepository: Repository<Course>,
     private notificationsService: NotificationsService,
   ) {}
 
-  async createThread(organizationId: string, courseId: string, authorId: string, threadData: any) {
-    const thread = new this.threadModel({
+  async createThread(
+    organizationId: string,
+    courseId: string,
+    authorId: string,
+    threadData: any,
+  ) {
+    const thread = this.threadRepository.create({
       ...threadData,
       organizationId,
       courseId,
       authorId,
     });
-    const saved = await thread.save();
+    const saved = await this.threadRepository.save(thread);
 
     // Notify instructors
     try {
-      const course = await this.courseModel.findOne({ _id: courseId, organizationId }).lean();
+      const course = await this.courseRepository.findOne({
+        where: { id: courseId, organizationId },
+      });
       if (course) {
-
         // notify all co-instructors
-        if (course.instructorIds && course.instructorIds.length > 0) {
-          for (const instId of course.instructorIds) {
-            if (instId.toString() !== authorId.toString()) {
-              await this.notificationsService.createNotification(organizationId, instId.toString(), 'New Course Question', `A new question was asked in ${course.title}`, 'DISCUSSION', `/courses/${courseId}`);
+        let instructorIds = course.instructorIds || [];
+        if (typeof instructorIds === 'string')
+          instructorIds = JSON.parse(instructorIds);
+
+        if (instructorIds && instructorIds.length > 0) {
+          for (const instId of instructorIds) {
+            if (instId !== authorId) {
+              await this.notificationsService.createNotification(
+                organizationId,
+                instId,
+                'New Course Question',
+                `A new question was asked in ${course.title}`,
+                'DISCUSSION',
+                `/courses/${courseId}`,
+              );
             }
           }
         }
@@ -43,95 +65,224 @@ export class DiscussionService {
     return saved;
   }
 
-  async getThreads(organizationId: string, courseId: string, lessonId?: string) {
-    const query: any = { organizationId, courseId, isDeleted: false };
+  async getThreads(
+    organizationId: string,
+    courseId: string,
+    lessonId?: string,
+  ) {
+    const queryBuilder = this.threadRepository
+      .createQueryBuilder('thread')
+      .leftJoin(User, 'author', 'author.id = thread.authorId')
+      .where('thread.organizationId = :organizationId', { organizationId })
+      .andWhere('thread.courseId = :courseId', { courseId })
+      .andWhere('thread.isDeleted = :isDeleted', { isDeleted: false })
+      .select([
+        'thread.*',
+        'author.id as author_id',
+        'author.fullName as author_fullName',
+        'author.email as author_email',
+        'author.userType as author_userType',
+      ])
+      .orderBy('thread.createdAt', 'DESC');
+
     if (lessonId) {
-      query.lessonId = lessonId;
+      queryBuilder.andWhere('thread.lessonId = :lessonId', { lessonId });
     }
-    return this.threadModel.find(query)
-      .sort({ createdAt: -1 })
-      .populate('authorId', 'fullName email userType'); 
+
+    const threads = await queryBuilder.getRawMany();
+    return threads.map((t) => ({
+      ...t,
+      authorId: {
+        _id: t.author_id,
+        id: t.author_id,
+        fullName: t.author_fullName,
+        email: t.author_email,
+        userType: t.author_userType,
+      },
+    }));
   }
 
-  async findThreadById(organizationId: string, courseId: string | undefined, threadId: string) {
-    const query: any = { _id: threadId, organizationId, isDeleted: false };
+  async findThreadById(
+    organizationId: string,
+    courseId: string | undefined,
+    threadId: string,
+  ) {
+    const queryBuilder = this.threadRepository
+      .createQueryBuilder('thread')
+      .leftJoin(User, 'author', 'author.id = thread.authorId')
+      .where('thread.id = :threadId', { threadId })
+      .andWhere('thread.organizationId = :organizationId', { organizationId })
+      .andWhere('thread.isDeleted = :isDeleted', { isDeleted: false })
+      .select([
+        'thread.*',
+        'author.id as author_id',
+        'author.fullName as author_fullName',
+        'author.email as author_email',
+        'author.userType as author_userType',
+      ]);
+
     if (courseId) {
-      query.courseId = courseId;
+      queryBuilder.andWhere('thread.courseId = :courseId', { courseId });
     }
-    const thread = await this.threadModel.findOne(query)
-      .populate('authorId', 'fullName email userType');
-    if (!thread) {
+
+    const t = await queryBuilder.getRawOne();
+    if (!t) {
       throw new NotFoundException('Thread not found');
     }
-    return thread;
+    return {
+      ...t,
+      authorId: {
+        _id: t.author_id,
+        id: t.author_id,
+        fullName: t.author_fullName,
+        email: t.author_email,
+        userType: t.author_userType,
+      },
+    };
   }
 
-  async getThreadById(organizationId: string, courseId: string | undefined, threadId: string) {
-    const thread = await this.findThreadById(organizationId, courseId, threadId);
-    thread.views += 1;
-    await thread.save();
-    return thread;
+  async getThreadById(
+    organizationId: string,
+    courseId: string | undefined,
+    threadId: string,
+  ) {
+    const threadInfo = await this.findThreadById(
+      organizationId,
+      courseId,
+      threadId,
+    );
+    await this.threadRepository.update(
+      { id: threadId },
+      { views: (threadInfo.views || 0) + 1 },
+    );
+    threadInfo.views = (threadInfo.views || 0) + 1;
+    return threadInfo;
   }
 
-  async addReply(organizationId: string, threadId: string, authorId: string, content: string) {
-    const thread = await this.threadModel.findOne({ _id: threadId, organizationId, isDeleted: false });
+  async addReply(
+    organizationId: string,
+    threadId: string,
+    authorId: string,
+    content: string,
+  ) {
+    const thread = await this.threadRepository.findOne({
+      where: { id: threadId, organizationId, isDeleted: false },
+    });
     if (!thread) throw new NotFoundException('Thread not found');
-    if (thread.isResolved) throw new BadRequestException('Cannot reply to a resolved thread');
+    if (thread.isResolved)
+      throw new BadRequestException('Cannot reply to a resolved thread');
 
-    const reply = new this.replyModel({
+    const reply = this.replyRepository.create({
       organizationId,
       threadId,
       authorId,
       content,
     });
-    
-    await reply.save();
-    
-    thread.replyCount += 1;
-    await thread.save();
+
+    await this.replyRepository.save(reply);
+
+    thread.replyCount = (thread.replyCount || 0) + 1;
+    await this.threadRepository.save(thread);
 
     // notify thread author if someone else replied
     try {
-      if (thread.authorId.toString() !== authorId.toString()) {
+      if (thread.authorId !== authorId) {
         await this.notificationsService.createNotification(
-          thread.organizationId.toString(),
-          thread.authorId.toString(),
+          thread.organizationId,
+          thread.authorId,
           'New reply to your thread',
-          `Someone replied to your discussion: ${thread.title || thread._id}`,
+          `Someone replied to your discussion: ${thread.title || thread.id}`,
           'DISCUSSION',
-          `/courses/${thread.courseId}/discussions/${thread._id}`
+          `/courses/${thread.courseId}/discussions/${thread.id}`,
         );
       }
     } catch (e) {}
 
-    return reply.populate('authorId', 'fullName email userType');
+    const r = await this.replyRepository
+      .createQueryBuilder('reply')
+      .leftJoin(User, 'author', 'author.id = reply.authorId')
+      .where('reply.id = :replyId', { replyId: reply.id })
+      .select([
+        'reply.*',
+        'author.id as author_id',
+        'author.fullName as author_fullName',
+        'author.email as author_email',
+        'author.userType as author_userType',
+      ])
+      .getRawOne();
+
+    return {
+      ...r,
+      authorId: {
+        _id: r.author_id,
+        id: r.author_id,
+        fullName: r.author_fullName,
+        email: r.author_email,
+        userType: r.author_userType,
+      },
+    };
   }
 
   async getReplies(organizationId: string, threadId: string) {
-    return this.replyModel.find({ organizationId, threadId, isDeleted: false })
-      .sort({ createdAt: 1 })
-      .populate('authorId', 'fullName email userType');
+    const replies = await this.replyRepository
+      .createQueryBuilder('reply')
+      .leftJoin(User, 'author', 'author.id = reply.authorId')
+      .where('reply.organizationId = :organizationId', { organizationId })
+      .andWhere('reply.threadId = :threadId', { threadId })
+      .andWhere('reply.isDeleted = :isDeleted', { isDeleted: false })
+      .select([
+        'reply.*',
+        'author.id as author_id',
+        'author.fullName as author_fullName',
+        'author.email as author_email',
+        'author.userType as author_userType',
+      ])
+      .orderBy('reply.createdAt', 'ASC')
+      .getRawMany();
+
+    return replies.map((r) => ({
+      ...r,
+      authorId: {
+        _id: r.author_id,
+        id: r.author_id,
+        fullName: r.author_fullName,
+        email: r.author_email,
+        userType: r.author_userType,
+      },
+    }));
   }
 
-  async markReplyAsAccepted(organizationId: string, threadId: string, replyId: string, actorId: string, actorType: string) {
-    const thread = await this.threadModel.findOne({ _id: threadId, organizationId, isDeleted: false });
+  async markReplyAsAccepted(
+    organizationId: string,
+    threadId: string,
+    replyId: string,
+    actorId: string,
+    actorType: string,
+  ) {
+    const thread = await this.threadRepository.findOne({
+      where: { id: threadId, organizationId, isDeleted: false },
+    });
     if (!thread) throw new NotFoundException('Thread not found');
 
-    const isThreadAuthor = thread.authorId.toString() === actorId.toString();
+    const isThreadAuthor = thread.authorId === actorId;
     const isStaff = actorType === 'ORG_USER' || actorType === 'FACULTY';
     if (!isThreadAuthor && !isStaff) {
-      throw new BadRequestException('Only the thread author or organization staff can accept a reply');
+      throw new BadRequestException(
+        'Only the thread author or organization staff can accept a reply',
+      );
     }
 
-    const reply = await this.replyModel.findOneAndUpdate(
-      { _id: replyId, threadId, organizationId, isDeleted: false },
-      { $set: { isAcceptedAnswer: true } },
-      { new: true }
+    await this.replyRepository.update(
+      { id: replyId, threadId, organizationId, isDeleted: false },
+      { isAcceptedAnswer: true },
     );
+    const reply = await this.replyRepository.findOne({
+      where: { id: replyId, threadId, organizationId, isDeleted: false },
+    });
     if (!reply) throw new NotFoundException('Reply not found');
 
     thread.isResolved = true;
-    await thread.save();
+    await this.threadRepository.save(thread);
 
     return reply;
   }

@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, Request, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  Request,
+  Patch,
+} from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -16,56 +26,102 @@ export class DiscussionController {
   async createThread(
     @Request() req: any,
     @Param('courseId') courseId: string,
-    @Body() threadData: CreateThreadDto
+    @Body() threadData: CreateThreadDto,
   ) {
     if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, courseId);
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        courseId,
+      );
     }
-    return this.discussionService.createThread(req.user.organizationId, courseId, req.user.userId, threadData);
+    return this.discussionService.createThread(
+      req.user.organizationId,
+      courseId,
+      req.user.userId,
+      threadData,
+    );
   }
 
   @Get('courses/:courseId/threads')
   async getThreads(
-    @Request() req: any, 
+    @Request() req: any,
     @Param('courseId') courseId: string,
-    @Query('lessonId') lessonId?: string
+    @Query('lessonId') lessonId?: string,
   ) {
     if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, courseId);
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        courseId,
+      );
     }
-    return this.discussionService.getThreads(req.user.organizationId, courseId, lessonId);
+    return this.discussionService.getThreads(
+      req.user.organizationId,
+      courseId,
+      lessonId,
+    );
   }
 
   @Get('courses/:courseId/threads/:threadId')
   async getThreadById(
     @Request() req: any,
     @Param('courseId') courseId: string,
-    @Param('threadId') threadId: string
+    @Param('threadId') threadId: string,
   ) {
     if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, courseId);
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        courseId,
+      );
     }
-    return this.discussionService.getThreadById(req.user.organizationId, courseId, threadId);
+    return this.discussionService.getThreadById(
+      req.user.organizationId,
+      courseId,
+      threadId,
+    );
   }
 
   @Post('threads/:threadId/replies')
   async addReply(
     @Request() req: any,
     @Param('threadId') threadId: string,
-    @Body('content') content: string
+    @Body('content') content: string,
   ) {
     if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(req.user.organizationId, undefined, threadId);
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, thread.courseId.toString());
+      const thread = await this.discussionService.findThreadById(
+        req.user.organizationId,
+        undefined,
+        threadId,
+      );
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        thread.courseId.toString(),
+      );
     }
-    return this.discussionService.addReply(req.user.organizationId, threadId, req.user.userId, content);
+    return this.discussionService.addReply(
+      req.user.organizationId,
+      threadId,
+      req.user.userId,
+      content,
+    );
   }
 
   @Get('threads/:threadId/replies')
   async getReplies(@Request() req: any, @Param('threadId') threadId: string) {
     if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(req.user.organizationId, undefined, threadId);
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, thread.courseId.toString());
+      const thread = await this.discussionService.findThreadById(
+        req.user.organizationId,
+        undefined,
+        threadId,
+      );
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        thread.courseId.toString(),
+      );
     }
     return this.discussionService.getReplies(req.user.organizationId, threadId);
   }
@@ -74,11 +130,19 @@ export class DiscussionController {
   async acceptReply(
     @Request() req: any,
     @Param('threadId') threadId: string,
-    @Param('replyId') replyId: string
+    @Param('replyId') replyId: string,
   ) {
     if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(req.user.organizationId, undefined, threadId);
-      await this.enrollmentService.verifyActiveEnrollment(req.user.organizationId, req.user.userId, thread.courseId.toString());
+      const thread = await this.discussionService.findThreadById(
+        req.user.organizationId,
+        undefined,
+        threadId,
+      );
+      await this.enrollmentService.verifyActiveEnrollment(
+        req.user.organizationId,
+        req.user.userId,
+        thread.courseId.toString(),
+      );
     }
     return this.discussionService.markReplyAsAccepted(
       req.user.organizationId,

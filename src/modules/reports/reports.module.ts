@@ -1,25 +1,25 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
-import { User, UserSchema } from '../users/schemas/user.schema';
-import { Course, CourseSchema } from '../courses/schemas/course.schema';
-import { Payment, PaymentSchema } from '../payment/schemas/payment.schema';
-import { Enrollment, EnrollmentSchema } from '../enrollment/schemas/enrollment.schema';
-import { LessonProgress, LessonProgressSchema } from '../progress/schemas/lessonProgress.schema';
-import { AssessmentResult, AssessmentResultSchema } from '../results/schemas/assessmentResult.schema';
-import { Organization, OrganizationSchema } from '../organizations/schemas/org.schema';
+import { User } from '../users/entities/user.entity';
+import { Course } from '../courses/entities/course.entity';
+import { Payment } from '../payment/entities/payment.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
+import { LessonProgress } from '../progress/entities/lessonProgress.entity';
+import { AssessmentResult } from '../results/entities/assessmentResult.entity';
+import { Organization } from '../organizations/entities/org.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
-      { name: Course.name, schema: CourseSchema },
-      { name: Payment.name, schema: PaymentSchema },
-      { name: Enrollment.name, schema: EnrollmentSchema },
-      { name: LessonProgress.name, schema: LessonProgressSchema },
-      { name: AssessmentResult.name, schema: AssessmentResultSchema },
-      { name: Organization.name, schema: OrganizationSchema },
+    TypeOrmModule.forFeature([
+      User,
+      Course,
+      Payment,
+      Enrollment,
+      LessonProgress,
+      AssessmentResult,
+      Organization,
     ]),
   ],
   controllers: [ReportsController],

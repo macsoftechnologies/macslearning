@@ -52,6 +52,8 @@ describe('OrganizationsService', () => {
       }),
     );
     expect(result).toEqual({ ok: true });
-    expect(orgModel.create.mock.calls[0][0].subscriptionConfig.expiresAt).toBeInstanceOf(Date);
+    expect(
+      orgModel.create.mock.calls[0][0].subscriptionConfig.expiresAt,
+    ).toBeInstanceOf(Date);
   });
 });

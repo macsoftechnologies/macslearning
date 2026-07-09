@@ -1,23 +1,23 @@
 import { Module } from '@nestjs/common';
 import { UsersModule } from '../users/users.module';
 import { AuditModule } from '../audit/audit.module';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
-import { Organization, OrganizationSchema } from './schemas/org.schema';
-import { CoursePlan, CoursePlanSchema } from './schemas/course-plan.schema';
-import { SubscriptionPlan, SubscriptionPlanSchema } from '../subscription-plans/schemas/subscription-plan.schema';
+import { Organization } from './entities/org.entity';
+import { CoursePlan } from './entities/course-plan.entity';
+import { SubscriptionPlan } from '../subscription-plans/entities/subscription-plan.entity';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Organization.name, schema: OrganizationSchema }]),
-    MongooseModule.forFeature([{ name: CoursePlan.name, schema: CoursePlanSchema }]),
-    MongooseModule.forFeature([{ name: SubscriptionPlan.name, schema: SubscriptionPlanSchema }]),
+    TypeOrmModule.forFeature([Organization]),
+    TypeOrmModule.forFeature([CoursePlan]),
+    TypeOrmModule.forFeature([SubscriptionPlan]),
     AuditModule,
     UsersModule,
   ],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],
-  exports: [OrganizationsService, MongooseModule],
+  exports: [OrganizationsService, TypeOrmModule],
 })
 export class OrganizationsModule {}

@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { RegionsService } from './regions.service';
 import { RegionsController } from './regions.controller';
-import { Region, RegionSchema } from './schemas/region.schema';
+import { Region } from './entities/region.entity';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Region.name, schema: RegionSchema }]),
-  ],
+  imports: [TypeOrmModule.forFeature([Region])],
   controllers: [RegionsController],
   providers: [RegionsService],
   exports: [RegionsService],

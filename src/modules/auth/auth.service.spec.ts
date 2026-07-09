@@ -72,7 +72,12 @@ describe('AuthService', () => {
       select: jest.fn().mockResolvedValue(user),
     });
 
-    await expect(service.login({ email: 'student@example.com', password: 'secret123' } as any)).rejects.toThrow(BadRequestException);
+    await expect(
+      service.login({
+        email: 'student@example.com',
+        password: 'secret123',
+      } as any),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('rejects login when the provided organization does not match the user account organization', async () => {
@@ -102,7 +107,11 @@ describe('AuthService', () => {
     }));
 
     await expect(
-      service.login({ email: 'student@example.com', password: 'secret123', organizationCode: 'org2' } as any),
+      service.login({
+        email: 'student@example.com',
+        password: 'secret123',
+        organizationCode: 'org2',
+      } as any),
     ).rejects.toThrow(UnauthorizedException);
   });
 });

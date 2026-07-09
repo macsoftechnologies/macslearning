@@ -25,7 +25,9 @@ describe('UsersService', () => {
     const userModel = service['userModel'] as any;
     userModel.findOne = jest.fn().mockResolvedValue(null);
 
-    const userCtor = jest.fn().mockImplementation((data: any) => ({ ...data, save, _id: 'user1' }));
+    const userCtor = jest
+      .fn()
+      .mockImplementation((data: any) => ({ ...data, save, _id: 'user1' }));
     userModel.mockImplementation(userCtor);
 
     const result = await service.createUser('org1', {
@@ -37,6 +39,8 @@ describe('UsersService', () => {
     });
 
     expect(result.userId).toBe('user1');
-    expect(userCtor).toHaveBeenCalledWith(expect.objectContaining({ mobile: undefined }));
+    expect(userCtor).toHaveBeenCalledWith(
+      expect.objectContaining({ mobile: undefined }),
+    );
   });
 });
