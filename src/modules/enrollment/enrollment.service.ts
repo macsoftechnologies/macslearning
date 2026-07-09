@@ -66,7 +66,10 @@ export class EnrollmentService {
       course.regionalPrices.length > 0
     ) {
       const rp = course.regionalPrices.find(
-        (p: any) => p.regionId === regionId,
+        (p: any) =>
+          p.regionId === regionId ||
+          (p.regionId && p.regionId._id === regionId) ||
+          (p.regionId && p.regionId.id === regionId),
       );
       if (rp) {
         amount = rp.price;
