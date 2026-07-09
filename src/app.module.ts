@@ -43,7 +43,7 @@ import { FacultyModule } from './modules/faculty/faculty.module';
         password: configService.get<string>('DB_PASSWORD') || '',
         database: configService.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
-        synchronize: true, // Only for dev. Set to false in prod and use migrations.
+        synchronize: configService.get<string>('NODE_ENV') !== 'production', // Disable synchronize in production to prevent data loss
       }),
       inject: [ConfigService],
     }),
