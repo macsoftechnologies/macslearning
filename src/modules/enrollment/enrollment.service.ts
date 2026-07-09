@@ -56,7 +56,7 @@ export class EnrollmentService {
     const pricing = course.pricing;
     if (pricing) {
       isPaid = pricing.isPaid || false;
-      amount = pricing.amount || 0;
+      amount = parseFloat(pricing.amount) || 0;
     }
 
     if (
@@ -79,7 +79,7 @@ export class EnrollmentService {
             (p.regionId && p.regionId.id === regionId),
         );
         if (rp) {
-          amount = rp.price;
+          amount = parseFloat(rp.price) || 0;
         }
       }
     }

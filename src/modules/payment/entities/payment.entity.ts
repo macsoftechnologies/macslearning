@@ -36,7 +36,7 @@ export class Payment {
   })
   status: string;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   amount: number;
 
   @Column({ type: 'varchar', nullable: true, default: 'INR' })
