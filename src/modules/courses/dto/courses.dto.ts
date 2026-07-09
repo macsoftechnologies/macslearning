@@ -74,6 +74,14 @@ export class CreateCourseDto {
   @IsOptional()
   @Type(() => Number)
   validityDays?: number;
+
+  @IsString()
+  @IsOptional()
+  certificateTemplateId?: string;
+
+  @IsEnum(['AUTO', 'MANUAL_APPROVAL'])
+  @IsOptional()
+  certificateIssueMode?: string;
 }
 
 export class UpdateCourseDto {

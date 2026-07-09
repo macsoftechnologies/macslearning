@@ -20,6 +20,7 @@ import { CreateCourseDto, UpdateCourseDto } from './dto/courses.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 
 @ApiTags('Courses')
 @ApiBearerAuth()
@@ -31,6 +32,7 @@ export class CoursesController {
     private readonly enrollmentService: EnrollmentService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly usersService: UsersService,
   ) {}
 
   @Get(':id/students')
@@ -121,15 +123,19 @@ export class CoursesController {
     });
 
     if (updateData.status === 'PUBLISHED') {
-      this.notificationsService
-        .createNotification(
-          req.user.organizationId.toString(),
-          req.user.userId.toString(),
-          'Course Published',
-          `Course "${course.title}" has been successfully published.`,
-          'COURSE',
-          `/courses/${course.id}`,
-        )
+      this.usersService.findUsersByRole(req.user.organizationId.toString(), 'STUDENT')
+        .then((studentIds) => {
+          if (studentIds.length > 0) {
+            this.notificationsService.createNotificationsBulk(
+              req.user.organizationId.toString(),
+              studentIds,
+              'New Course Available',
+              `A new course "${course.title}" has just been published!`,
+              'COURSE',
+              `/student/courses/${course.id}`,
+            );
+          }
+        })
         .catch(() => {});
     }
 

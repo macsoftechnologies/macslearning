@@ -130,6 +130,20 @@ export class EnrollmentService {
       // ignore notification errors
     }
 
+    // Notify faculty
+    if (course.instructorIds && course.instructorIds.length > 0) {
+      try {
+        await this.notificationsService.createNotificationsBulk(
+          organizationId,
+          course.instructorIds,
+          'New Student Enrolled',
+          `A new student has enrolled in your course "${course.title || courseId}".`,
+          'ENROLLMENT',
+          `/faculty/courses/${courseId}/students`,
+        );
+      } catch (e) {}
+    }
+
     return {
       success: true,
       dummyPaymentId: paymentRecord ? paymentRecord.dummyPaymentId : null,

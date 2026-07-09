@@ -42,6 +42,38 @@ export class NotificationsService {
     return savedNotification;
   }
 
+  async createNotificationsBulk(
+    organizationId: string,
+    userIds: string[],
+    title: string,
+    message: string,
+    type: string = 'SYSTEM',
+    link?: string,
+  ) {
+    if (!userIds || userIds.length === 0) return;
+
+    const notifications = userIds.map((userId) => ({
+      organizationId,
+      userId,
+      title,
+      message,
+      type,
+      link,
+      isRead: false,
+    }));
+
+    // Bulk insert for performance
+    await this.notificationRepository.insert(notifications);
+
+    // Emit to WebSocket for each user if connected
+    // This assumes gateway.sendNotification can be called in a loop, or we could add a bulk emit method
+    userIds.forEach((userId) => {
+      try {
+        this.gateway.sendNotification(userId, notifications.find(n => n.userId === userId));
+      } catch (e) {}
+    });
+  }
+
   async getUserNotifications(
     organizationId: string,
     userId: string,

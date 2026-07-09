@@ -6,6 +6,7 @@ import { ExamsService } from './exams.service';
 import { ExamsProcessor } from './exams.processor';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
+import { CoursesModule } from '../courses/courses.module';
 import { Exam } from './entities/exam.entity';
 import { Question } from './entities/question.entity';
 import { Attempt } from './entities/attempt.entity';
@@ -15,6 +16,7 @@ import { AssessmentResult } from '../results/entities/assessmentResult.entity';
   imports: [
     NotificationsModule,
     EnrollmentModule,
+    CoursesModule,
     BullModule.registerQueue({
       name: 'exams',
     }),

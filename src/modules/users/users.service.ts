@@ -215,4 +215,17 @@ export class UsersService {
     const { passwordHash, refreshTokens, ...safeUser } = user;
     return safeUser;
   }
+
+  async findUsersByRole(organizationId: string, userType: string): Promise<string[]> {
+    const users = await this.userRepository.find({
+      where: {
+        organizationId,
+        userType,
+        status: 'ACTIVE',
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    return users.map((u) => u.id);
+  }
 }

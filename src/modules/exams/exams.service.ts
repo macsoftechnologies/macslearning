@@ -12,6 +12,7 @@ import { Question } from './entities/question.entity';
 import { Attempt } from './entities/attempt.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CoursesService } from '../courses/courses.service';
 import { User } from '../users/entities/user.entity';
 
 @Injectable()
@@ -25,6 +26,7 @@ export class ExamsService {
     private resultRepository: Repository<AssessmentResult>,
     @InjectQueue('exams') private examsQueue: Queue,
     private notificationsService: NotificationsService,
+    private coursesService: CoursesService,
   ) {}
 
   async createExam(
@@ -362,6 +364,21 @@ export class ExamsService {
     }
 
     await this.resultRepository.save(result);
+
+    // Notify the course faculty
+    try {
+      const course = await this.coursesService.getCourseById(exam.courseId, organizationId);
+      if (course && course.instructorIds && course.instructorIds.length > 0) {
+        await this.notificationsService.createNotificationsBulk(
+          organizationId,
+          course.instructorIds,
+          'Exam Submitted',
+          `A student has submitted the exam "${exam.title}" for course "${course.title}".`,
+          'EXAM',
+          `/faculty/courses/${exam.courseId}/exams/${exam.id}/results`,
+        );
+      }
+    } catch (e) {}
 
     return { message: 'Exam submitted successfully', attemptId: attempt.id };
   }

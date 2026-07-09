@@ -7,6 +7,7 @@ import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     OrganizationsModule,
     AuditModule,
     NotificationsModule,
+    UsersModule,
   ],
   controllers: [CoursesController],
   providers: [CoursesService],

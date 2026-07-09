@@ -36,13 +36,13 @@ export class CertificatesController {
   }
 
   @Get('templates')
-  @Roles('ORG_USER')
+  @Roles('ORG_USER', 'FACULTY')
   async listTemplates(@Request() req: any) {
     return this.certificatesService.listTemplates(req.user.organizationId);
   }
 
   @Get('templates/:id')
-  @Roles('ORG_USER')
+  @Roles('ORG_USER', 'FACULTY')
   async getTemplate(@Request() req: any, @Param('id') id: string) {
     return this.certificatesService.getTemplateById(
       id,

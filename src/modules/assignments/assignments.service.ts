@@ -9,6 +9,7 @@ import { Assignment } from './entities/assignment.entity';
 import { Submission } from './entities/submission.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { CoursesService } from '../courses/courses.service';
 import { User } from '../users/entities/user.entity';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class AssignmentsService {
     private submissionRepository: Repository<Submission>,
     private notificationsService: NotificationsService,
     private auditService: AuditService,
+    private coursesService: CoursesService,
   ) {}
 
   async createAssignment(
@@ -100,7 +102,24 @@ export class AssignmentsService {
       });
     }
 
-    return this.submissionRepository.save(submission);
+    const savedSubmission = await this.submissionRepository.save(submission);
+
+    // Notify faculty
+    try {
+      const course = await this.coursesService.getCourseById(assignment.courseId, organizationId);
+      if (course && course.instructorIds && course.instructorIds.length > 0) {
+        await this.notificationsService.createNotificationsBulk(
+          organizationId,
+          course.instructorIds,
+          'Assignment Submitted',
+          `A student has submitted the assignment "${assignment.title}" for course "${course.title}".`,
+          'SYSTEM',
+          `/faculty/courses/${assignment.courseId}/assignments/${assignment.id}/submissions`,
+        );
+      }
+    } catch (e) {}
+
+    return savedSubmission;
   }
 
   async gradeSubmission(
