@@ -84,6 +84,11 @@ export class CreateCourseDto {
   certificateIssueMode?: string;
 }
 
+export class UpdateCourseStatusDto {
+  @IsEnum(['DRAFT', 'PUBLISHED', 'ARCHIVED'])
+  status: string;
+}
+
 export class UpdateCourseDto {
   @IsString()
   @IsOptional()

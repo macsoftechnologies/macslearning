@@ -16,7 +16,11 @@ import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CreateCourseDto, UpdateCourseDto } from './dto/courses.dto';
+import {
+  CreateCourseDto,
+  UpdateCourseDto,
+  UpdateCourseStatusDto,
+} from './dto/courses.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -107,7 +111,7 @@ export class CoursesController {
   async updateCourseStatus(
     @Request() req: any,
     @Param('id') courseId: string,
-    @Body() updateData: UpdateCourseDto,
+    @Body() updateData: UpdateCourseStatusDto,
   ) {
     const course = await this.coursesService.updateCourse(
       courseId,
