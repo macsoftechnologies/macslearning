@@ -103,6 +103,11 @@ export class UpdateCourseDto {
   pricing?: PricingDto;
 
   @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  instructorIds?: string[];
+
+  @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => RegionPriceDto)
