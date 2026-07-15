@@ -35,27 +35,11 @@ export class ContentService {
     private notificationsService: NotificationsService,
   ) {}
 
-  private async ensureCourseNotPublished(
-    courseId: string,
-    organizationId: string,
-  ) {
-    const course = await this.courseRepository.findOne({
-      where: { id: courseId, organizationId },
-    });
-    if (!course) throw new NotFoundException('Course not found');
-    if (course.status === 'PUBLISHED') {
-      throw new BadRequestException(
-        'Cannot modify content of a published course.',
-      );
-    }
-  }
-
   async createModule(
     organizationId: string,
     courseId: string,
     moduleData: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     const courseModule = this.moduleRepository.create({
       ...moduleData,
       organizationId,
@@ -78,7 +62,6 @@ export class ContentService {
     moduleId: string,
     lessonData: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = this.lessonRepository.create({
       ...lessonData,
       organizationId,
@@ -102,7 +85,6 @@ export class ContentService {
     moduleId: string,
     updateData: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     await this.moduleRepository.update(
       { id: moduleId, courseId, organizationId, isDeleted: false },
       updateData,
@@ -119,7 +101,6 @@ export class ContentService {
     courseId: string,
     moduleId: string,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     await this.moduleRepository.update(
       { id: moduleId, courseId, organizationId, isDeleted: false },
       { isDeleted: true },
@@ -138,7 +119,6 @@ export class ContentService {
     lessonId: string,
     updateData: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     await this.lessonRepository.update(
       { id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
       updateData,
@@ -162,7 +142,6 @@ export class ContentService {
     moduleId: string,
     lessonId: string,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     await this.lessonRepository.update(
       { id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
       { isDeleted: true },
@@ -186,7 +165,6 @@ export class ContentService {
     lessonId: string,
     dto: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = await this.lessonRepository.findOne({
       where: { id: lessonId, organizationId, courseId, isDeleted: false },
     });
@@ -367,7 +345,6 @@ export class ContentService {
     lessonId: string,
     quizData: any,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     const lesson = await this.lessonRepository.findOne({
       where: { id: lessonId, organizationId, courseId, isDeleted: false },
     });
@@ -398,7 +375,6 @@ export class ContentService {
     lessonId: string,
     quizId: string,
   ) {
-    await this.ensureCourseNotPublished(courseId, organizationId);
     const quiz = await this.videoQuizRepository.findOne({
       where: { id: quizId, organizationId, courseId, lessonId },
     });
