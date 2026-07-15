@@ -266,9 +266,10 @@ export class ContentController {
     @Param('quizId') quizId: string,
     @Body() answer: any,
   ) {
+    const studentId = req.user.userId || req.user._id || req.user.id;
     return this.contentService.submitVideoQuizAnswer(
       req.user.organizationId,
-      req.user._id,
+      studentId,
       courseId,
       lessonId,
       quizId,
