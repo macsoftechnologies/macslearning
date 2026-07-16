@@ -104,6 +104,15 @@ export class OrganizationsService {
     return org;
   }
 
+  async getOrganizationBySlugForPublic(slug: string) {
+    const org = await this.orgRepository.findOne({
+      where: { slug, isDeleted: false, status: 'ACTIVE' },
+      select: ['id', 'name', 'logoUrl', 'themeColors', 'slug'],
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+    return org;
+  }
+
   async updateOrganization(id: string, updateData: any) {
     await this.orgRepository.update({ id, isDeleted: false }, updateData);
     const org = await this.orgRepository.findOne({
