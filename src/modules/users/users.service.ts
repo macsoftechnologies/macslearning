@@ -202,8 +202,26 @@ export class UsersService {
     if (!user) {
       throw new BadRequestException('User not found');
     }
+    
+    let organizationName = null;
+    let organizationSlug = null;
+    if (user.organizationId) {
+      try {
+        const orgRepo = this.dataSource.getRepository('Organization');
+        const org = await orgRepo.findOne({
+          where: { id: user.organizationId, isDeleted: false }
+        });
+        if (org) {
+          organizationName = org.name;
+          organizationSlug = org.slug;
+        }
+      } catch (err) {
+        // Ignore
+      }
+    }
+
     const { passwordHash, refreshTokens, ...safeUser } = user;
-    return safeUser;
+    return { ...safeUser, organizationName, organizationSlug };
   }
 
   async updateUser(userId: string, updateData: any) {
@@ -212,8 +230,26 @@ export class UsersService {
     if (!user) {
       throw new BadRequestException('User not found');
     }
+
+    let organizationName = null;
+    let organizationSlug = null;
+    if (user.organizationId) {
+      try {
+        const orgRepo = this.dataSource.getRepository('Organization');
+        const org = await orgRepo.findOne({
+          where: { id: user.organizationId, isDeleted: false }
+        });
+        if (org) {
+          organizationName = org.name;
+          organizationSlug = org.slug;
+        }
+      } catch (err) {
+        // Ignore
+      }
+    }
+
     const { passwordHash, refreshTokens, ...safeUser } = user;
-    return safeUser;
+    return { ...safeUser, organizationName, organizationSlug };
   }
 
   async findUsersByRole(organizationId: string, userType: string): Promise<string[]> {
