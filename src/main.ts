@@ -14,7 +14,7 @@ async function bootstrap() {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   app.use(helmet({ crossOriginResourcePolicy: false, crossOriginEmbedderPolicy: false, frameguard: false }));
   app.enableCors({ origin: frontendUrl, credentials: true });
-  app.useStaticAssets(join(__dirname, '..', 'public', 'uploads'), {
+  app.useStaticAssets(join(process.cwd(), 'public', 'uploads'), {
     prefix: '/uploads',
   });
   app.setGlobalPrefix('api/v1');
