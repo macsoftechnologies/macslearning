@@ -29,4 +29,9 @@ export class PaginationQueryDto {
       : value,
   )
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by userType' })
+  @IsOptional()
+  @IsString()
+  userType?: string;
 }

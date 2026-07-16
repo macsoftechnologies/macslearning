@@ -137,14 +137,20 @@ export class UsersService {
     return createPaginatedResponse(safeData, totalItems, page, limit);
   }
 
-  async getUsersByOrg(organizationId: string, queryDto: PaginationQueryDto) {
-    const { page = 1, limit = 10, search } = queryDto;
+  async getUsersByOrg(organizationId: string, queryDto: PaginationQueryDto & { userType?: string }) {
+    const { page = 1, limit = 10, search, userType } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .where('user.organizationId = :organizationId', { organizationId })
-      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false })
+      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (userType) {
+      queryBuilder.andWhere('user.userType = :userType', { userType });
+    }
+
+    queryBuilder
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit);
