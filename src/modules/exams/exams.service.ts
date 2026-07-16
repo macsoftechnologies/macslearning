@@ -59,18 +59,38 @@ export class ExamsService {
   }
 
   async publishExam(organizationId: string, examId: string) {
-    await this.examRepository.update(
-      { id: examId, organizationId },
-      { status: 'PUBLISHED' },
-    );
     const exam = await this.examRepository.findOne({
       where: { id: examId, organizationId },
     });
     if (!exam) throw new NotFoundException('Exam not found');
+
+    const questions = await this.questionRepository.find({
+      where: { examId, organizationId },
+    });
+
+    const totalQuestionMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
+
+    if (totalQuestionMarks !== exam.totalMarks) {
+      throw new BadRequestException(
+        `Cannot publish exam. The sum of question marks (${totalQuestionMarks}) must exactly match the exam's total marks (${exam.totalMarks}).`
+      );
+    }
+
+    await this.examRepository.update(
+      { id: examId, organizationId },
+      { status: 'PUBLISHED' },
+    );
+
+    exam.status = 'PUBLISHED';
     return exam;
   }
 
   async addQuestion(organizationId: string, examId: string, questionData: any) {
+    const exam = await this.examRepository.findOne({ where: { id: examId, organizationId }});
+    if (exam && exam.status === 'PUBLISHED') {
+      throw new BadRequestException('Cannot add questions to a published exam');
+    }
+
     const question = this.questionRepository.create({
       ...questionData,
       organizationId,
@@ -146,6 +166,11 @@ export class ExamsService {
     questionId: string,
     updateData: any,
   ) {
+    const exam = await this.examRepository.findOne({ where: { id: examId, organizationId }});
+    if (exam && exam.status === 'PUBLISHED') {
+      delete updateData.marks;
+    }
+
     await this.questionRepository.update(
       { id: questionId, examId, organizationId, isDeleted: false },
       updateData,
@@ -162,6 +187,11 @@ export class ExamsService {
     examId: string,
     questionId: string,
   ) {
+    const exam = await this.examRepository.findOne({ where: { id: examId, organizationId }});
+    if (exam && exam.status === 'PUBLISHED') {
+      throw new BadRequestException('Cannot delete questions from a published exam');
+    }
+
     await this.questionRepository.update(
       { id: questionId, examId, organizationId },
       { isDeleted: true },

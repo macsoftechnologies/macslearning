@@ -51,13 +51,26 @@ export class ReportsService {
 
     const revenue = parseFloat(paymentAgg?.totalRevenue || '0');
 
+    const enrollmentAgg = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .select('COUNT(*)', 'total')
+      .addSelect("SUM(CASE WHEN enrollment.status = 'COMPLETED' THEN 1 ELSE 0 END)", 'completed')
+      .getRawOne();
+
+    const totalE = parseInt(enrollmentAgg?.total || '0', 10);
+    const compE = parseInt(enrollmentAgg?.completed || '0', 10);
+    const completionRate = totalE > 0 ? Number(((compE / totalE) * 100).toFixed(1)) : 0;
+
     return {
       totalStudents,
       pendingApprovals,
       activeCourses,
+      totalCourses: activeCourses,
       totalFaculty,
       totalEnrollments,
       revenue,
+      completionRate,
     };
   }
 
