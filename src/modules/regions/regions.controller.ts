@@ -32,28 +32,32 @@ export class RegionsController {
 
   // Get all regions. Publicly accessible for registration dropdown.
   @Get()
-  findAll(@Query('orgId') orgId?: string) {
-    return this.regionsService.findAll(orgId);
+  findAll(@Query('orgId') orgId?: string, @Query('slug') slug?: string) {
+    return this.regionsService.findAll(orgId, slug);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ORG_USER')
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.regionsService.findOne(id);
+  findOne(@Request() req: any, @Param('id') id: string) {
+    return this.regionsService.findOne(id, req.user.organizationId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ORG_USER')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateRegionDto: UpdateRegionDto) {
-    return this.regionsService.update(id, updateRegionDto);
+  update(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() updateRegionDto: UpdateRegionDto,
+  ) {
+    return this.regionsService.update(id, req.user.organizationId, updateRegionDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'ORG_USER')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.regionsService.remove(id);
+  remove(@Request() req: any, @Param('id') id: string) {
+    return this.regionsService.remove(id, req.user.organizationId);
   }
 }
