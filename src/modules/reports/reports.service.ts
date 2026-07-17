@@ -102,7 +102,7 @@ export class ReportsService {
       const planIds = orgsWithPlans.map(org => org.subscriptionConfig?.planId).filter(Boolean);
       if (planIds.length > 0) {
         const plans = await this.orgRepository.manager.query(
-          `SELECT id, price FROM subscription_plans WHERE id IN (?)`,
+          `SELECT id, price FROM subscriptionplans WHERE id IN (?)`,
           [planIds]
         );
         const planPriceMap = new Map(plans.map((p: any) => [p.id, parseFloat(p.price || 0)]));
