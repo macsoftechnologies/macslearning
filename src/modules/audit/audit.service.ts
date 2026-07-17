@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { User } from '../users/entities/user.entity';
 import { Organization } from '../organizations/entities/org.entity';
+import { createPaginatedResponse } from '../../common/utils/pagination.util';
 
 @Injectable()
 export class AuditService {
@@ -86,11 +87,6 @@ export class AuditService {
       },
     }));
 
-    return {
-      data: logs,
-      total,
-      page,
-      limit,
-    };
+    return createPaginatedResponse(logs, total, page, limit);
   }
 }

@@ -42,13 +42,18 @@ export class OrganizationsService {
           maxStudents: plan.maxUsers ?? 0,
           maxStorageGB: plan.storageGB ?? 0,
           expiresAt,
+          paymentStatus: orgData.paymentStatus,
+          lastPaymentDate: orgData.lastPaymentDate,
+          paymentReferenceId: orgData.paymentReferenceId,
         };
       }
     }
 
     const domain = orgData.domain || `${orgData.code.toLowerCase()}.lms.com`;
+    const initialStatus = orgData.paymentStatus === 'PENDING' ? 'INACTIVE' : 'ACTIVE';
     const organizationPayload = {
       ...orgData,
+      status: initialStatus,
       domain,
       slug: orgData.code.toLowerCase(),
       loginUrl: `/${orgData.code.toLowerCase()}/login`,
