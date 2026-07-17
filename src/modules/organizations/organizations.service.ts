@@ -35,14 +35,25 @@ export class OrganizationsService {
             (plan.durationInDays || 30) * 24 * 60 * 60 * 1000,
         );
 
+        let finalPrice = 0;
+        let finalCurrency = 'USD';
+        
+        if (plan.regionalPrices && Array.isArray(plan.regionalPrices)) {
+           const regionalConfig = plan.regionalPrices.find(rp => rp.regionId === orgData.regionId);
+           if (regionalConfig) {
+             finalPrice = regionalConfig.price || 0;
+             finalCurrency = regionalConfig.currency || 'USD';
+           }
+        }
+
         resolvedSubscriptionConfig = {
           planId: plan.id,
           planType: plan.code,
           durationInDays: plan.durationInDays || 30,
           maxStudents: plan.maxUsers ?? 0,
           maxStorageGB: plan.storageGB ?? 0,
-          price: plan.price ?? 0,
-          currency: plan.currency || 'USD',
+          price: finalPrice,
+          currency: finalCurrency,
           expiresAt,
           paymentStatus: orgData.paymentStatus,
           lastPaymentDate: orgData.lastPaymentDate,
@@ -171,6 +182,17 @@ export class OrganizationsService {
     
     const newExpiresAt = new Date(startDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
 
+    let finalPrice = 0;
+    let finalCurrency = 'USD';
+    
+    if (plan.regionalPrices && Array.isArray(plan.regionalPrices)) {
+       const regionalConfig = plan.regionalPrices.find(rp => rp.regionId === org.regionId);
+       if (regionalConfig) {
+         finalPrice = regionalConfig.price || 0;
+         finalCurrency = regionalConfig.currency || 'USD';
+       }
+    }
+
     const updatedConfig = {
       ...org.subscriptionConfig,
       planId: plan.id,
@@ -178,8 +200,8 @@ export class OrganizationsService {
       durationInDays: durationDays,
       maxStudents: plan.maxUsers ?? 0,
       maxStorageGB: plan.storageGB ?? 0,
-      price: plan.price ?? 0,
-      currency: plan.currency || 'USD',
+      price: finalPrice,
+      currency: finalCurrency,
       expiresAt: newExpiresAt
     };
 

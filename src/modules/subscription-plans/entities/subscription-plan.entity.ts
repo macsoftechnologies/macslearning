@@ -17,15 +17,6 @@ export class SubscriptionPlan {
   @Column({ type: 'varchar' })
   code: string;
 
-  @Column({ type: 'int', nullable: true })
-  price: number;
-
-  @Column({ type: 'varchar', nullable: true })
-  regionId: string;
-
-  @Column({ type: 'varchar', nullable: true })
-  currency: string;
-
   @Column({ type: 'json', nullable: true })
   regionalPrices: any[];
 
