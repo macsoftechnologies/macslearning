@@ -174,9 +174,6 @@ export class OrganizationsService {
     await this.orgRepository.update(orgId, {
       subscriptionConfig: updatedConfig,
       subscriptionExpiresAt: newExpiresAt,
-      paymentStatus: 'PAID',
-      lastPaymentDate: new Date(),
-      paymentReferenceId: data.paymentReferenceId || org.paymentReferenceId,
     });
 
     return this.getOrganizationById(orgId);
