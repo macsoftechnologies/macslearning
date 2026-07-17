@@ -95,7 +95,6 @@ export class ReportsService {
     const orgsWithPlans = await this.orgRepository.createQueryBuilder('org')
       .where('org.status = :status', { status: 'ACTIVE' })
       .andWhere('org.isDeleted = false')
-      .andWhere('org.paymentStatus = :paymentStatus', { paymentStatus: 'PAID' })
       .getMany();
 
     let totalRevenue = 0;
