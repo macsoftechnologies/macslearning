@@ -17,7 +17,7 @@ export class UsersService {
     const { email, password, fullName, userType, mobile } = userData;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email, organizationId },
     });
     if (existingUser) {
       throw new BadRequestException('User with this email already exists');
@@ -47,7 +47,7 @@ export class UsersService {
     const { email, password, fullName, mobile, regionId } = studentData;
 
     const existingUser = await this.userRepository.findOne({
-      where: { email },
+      where: { email, organizationId },
     });
     if (existingUser) {
       throw new BadRequestException('User with this email already exists');
