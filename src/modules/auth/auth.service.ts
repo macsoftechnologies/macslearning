@@ -118,6 +118,7 @@ export class AuthService {
       fullName: user.fullName,
       userType: user.userType,
       organizationId: user.organizationId,
+      orgExpiresAt: organization?.subscriptionConfig?.expiresAt,
       regionId: user.regionId,
       permissions: user.modulePermissions,
     };
@@ -229,12 +230,21 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      let orgExpiresAt = undefined;
+      if (user.organizationId) {
+        const org = await this.organizationRepository.findOne({
+          where: { id: user.organizationId }
+        });
+        orgExpiresAt = org?.subscriptionConfig?.expiresAt;
+      }
+
       const payload = {
         userId: user.id,
         email: user.email,
         fullName: user.fullName,
         userType: user.userType,
         organizationId: user.organizationId,
+        orgExpiresAt: orgExpiresAt,
         regionId: user.regionId,
         permissions: user.modulePermissions,
       };

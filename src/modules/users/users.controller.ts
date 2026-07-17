@@ -15,6 +15,9 @@ import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../../common/constants/permissions.constant';
 import {
   CreateStudentDto,
   CreateUserDto,
@@ -23,13 +26,17 @@ import {
   UpdateUserStatusDto,
 } from './dto/users.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Get('me')
   async getMe(@Request() req: any) {
@@ -73,30 +80,60 @@ export class UsersController {
 
   @Post('super-admin-team')
   @Roles('SUPER_ADMIN')
-  async createSuperAdminTeamMember(@Body() adminData: CreateSuperAdminTeamDto) {
-    return this.usersService.createSuperAdminTeamMember(adminData);
+  @RequirePermissions(PERMISSIONS.MANAGE_ROLES)
+  async createSuperAdminTeamMember(
+    @Request() req: any,
+    @Body() adminData: CreateSuperAdminTeamDto,
+  ) {
+    const res = await this.usersService.createSuperAdminTeamMember(adminData);
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      action: 'Super Admin Team Member Created',
+      targetId: res.userId,
+      metadata: { email: adminData.email },
+    });
+    return res;
   }
 
   @Patch('super-admin-team/:id')
   @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.MANAGE_ROLES)
   async updateSuperAdminTeamMember(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() updateData: UpdateUserDto,
   ) {
-    return this.usersService.updateUser(id, updateData);
+    const res = await this.usersService.updateUser(id, updateData);
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      action: 'Super Admin Team Member Updated',
+      targetId: id,
+      metadata: { updateData },
+    });
+    return res;
   }
 
   @Patch('super-admin-team/:id/status')
   @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.MANAGE_ROLES)
   async updateSuperAdminTeamStatus(
+    @Request() req: any,
     @Param('id') id: string,
     @Body() statusDto: UpdateUserStatusDto,
   ) {
-    return this.usersService.updateUser(id, { status: statusDto.status });
+    const res = await this.usersService.updateUser(id, { status: statusDto.status });
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      action: `Super Admin Team Member Status Changed: ${statusDto.status}`,
+      targetId: id,
+      metadata: { status: statusDto.status },
+    });
+    return res;
   }
 
   @Get('super-admin-team')
   @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.MANAGE_ROLES)
   @ApiOperation({
     summary: 'Get all super admin team members with pagination and search',
   })

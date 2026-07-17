@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Organization } from '../../modules/organizations/entities/org.entity';
+import { User } from '../../modules/users/entities/user.entity';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -12,6 +13,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     @InjectRepository(Organization)
     private orgRepository: Repository<Organization>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -21,8 +24,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    if (!payload) {
+    if (!payload || !payload.userId) {
       throw new UnauthorizedException();
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: payload.userId } });
+    if (!user || user.status !== 'ACTIVE' || user.isDeleted) {
+      throw new UnauthorizedException('Your account has been deactivated');
     }
 
     if (payload.organizationId) {
@@ -31,6 +39,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
       if (!org || org.status !== 'ACTIVE' || org.isDeleted) {
         throw new UnauthorizedException('Organization is disabled');
+      }
+      if (org.subscriptionConfig?.expiresAt && new Date(org.subscriptionConfig.expiresAt) < new Date()) {
+        if (payload.userType === 'ORG_ADMIN' || payload.userType === 'ORG_USER') {
+          throw new UnauthorizedException('Organization subscription has expired');
+        } else {
+          throw new UnauthorizedException('Please contact your Organization Administrator to restore access');
+        }
       }
     }
     return {

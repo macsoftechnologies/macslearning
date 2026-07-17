@@ -76,26 +76,46 @@ export class ReportsService {
 
   async getSuperAdminStats() {
     const totalOrganizations = await this.orgRepository.count({
-      where: { isDeleted: false },
+      where: { isDeleted: false, status: 'ACTIVE' },
     });
-    const totalUsers = await this.userRepository.count();
+    const totalUsers = await this.userRepository.count({
+      where: { isDeleted: false, status: 'ACTIVE' },
+    });
     const totalStudents = await this.userRepository.count({
-      where: { userType: 'STUDENT' },
+      where: { userType: 'STUDENT', isDeleted: false, status: 'ACTIVE' },
     });
     const totalFaculty = await this.userRepository.count({
-      where: { userType: 'FACULTY' },
+      where: { userType: 'FACULTY', isDeleted: false, status: 'ACTIVE' },
     });
     const totalCourses = await this.courseRepository.count({
-      where: { isDeleted: false },
+      where: { isDeleted: false, status: 'PUBLISHED' },
     });
 
-    const paymentAgg = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .where('payment.status = :status', { status: 'COMPLETED' })
-      .select('SUM(payment.amount)', 'totalRevenue')
-      .getRawOne();
+    // Calculate revenue from active organizations that have a paid plan
+    const orgsWithPlans = await this.orgRepository.createQueryBuilder('org')
+      .where('org.status = :status', { status: 'ACTIVE' })
+      .andWhere('org.isDeleted = false')
+      .andWhere('org.paymentStatus = :paymentStatus', { paymentStatus: 'PAID' })
+      .getMany();
 
-    const totalRevenue = parseFloat(paymentAgg?.totalRevenue || '0');
+    let totalRevenue = 0;
+    if (orgsWithPlans.length > 0) {
+      const planIds = orgsWithPlans.map(org => org.subscriptionConfig?.planId).filter(Boolean);
+      if (planIds.length > 0) {
+        const plans = await this.orgRepository.manager.query(
+          `SELECT id, price FROM subscription_plans WHERE id IN (?)`,
+          [planIds]
+        );
+        const planPriceMap = new Map(plans.map((p: any) => [p.id, parseFloat(p.price || 0)]));
+        
+        for (const org of orgsWithPlans) {
+          const planId = org.subscriptionConfig?.planId;
+          if (planId && planPriceMap.has(planId)) {
+            totalRevenue += (planPriceMap.get(planId) as number) || 0;
+          }
+        }
+      }
+    }
 
     return {
       totalOrganizations,

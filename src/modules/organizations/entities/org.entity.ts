@@ -45,6 +45,25 @@ export class Organization {
   @Column({ type: 'json', nullable: true })
   subscriptionConfig: any;
 
+  @Column({
+    type: 'enum',
+    enum: ['PAID', 'PENDING', 'OVERDUE'],
+    default: 'PENDING',
+  })
+  paymentStatus: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastPaymentDate: Date;
+
+  @Column({ type: 'varchar', nullable: true })
+  paymentReferenceId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  receiptUrl: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionExpiresAt: Date;
+
   @Column({ default: false })
   isDeleted: boolean;
 

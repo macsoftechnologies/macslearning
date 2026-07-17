@@ -7,15 +7,24 @@ import {
   Request,
   Post,
   Query,
+  Body,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @Controller('notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
+
+  @Post('broadcast')
+  @Roles('SUPER_ADMIN')
+  async broadcast(@Body() data: { title: string, message: string }) {
+    return this.notificationsService.broadcast(data.title, data.message);
+  }
 
   @Get()
   async getUserNotifications(

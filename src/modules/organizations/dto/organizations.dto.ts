@@ -64,6 +64,21 @@ export class CreateOrganizationDto {
     maxStorageGB?: number;
     expiresAt?: Date;
   };
+
+  @IsEnum(['PAID', 'PENDING', 'OVERDUE'])
+  @IsOptional()
+  paymentStatus?: string;
+
+  @IsOptional()
+  lastPaymentDate?: Date;
+
+  @IsString()
+  @IsOptional()
+  paymentReferenceId?: string;
+
+  @IsString()
+  @IsOptional()
+  receiptUrl?: string;
 }
 
 export class UpdateOrganizationStatusDto {

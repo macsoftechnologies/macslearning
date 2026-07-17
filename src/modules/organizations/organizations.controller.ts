@@ -108,6 +108,25 @@ export class OrganizationsController {
     return org;
   }
 
+  @Post(':id/extend-subscription')
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
+  async extendSubscription(
+    @Request() req: any,
+    @Param('id') orgId: string,
+    @Body() data: { planId?: string, paymentReferenceId?: string },
+  ) {
+    const org = await this.organizationsService.extendSubscription(orgId, data);
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: orgId,
+      action: 'Organization Subscription Extended',
+      targetId: org.id,
+      metadata: { name: org.name, newExpiresAt: org.subscriptionExpiresAt },
+    });
+    return org;
+  }
+
   @Get('me')
   @Roles('ORG_USER')
   async getMyOrganization(@Request() req: any) {

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { Notification } from './entities/notification.entity';
@@ -12,6 +12,7 @@ export class NotificationsService {
     @InjectRepository(Notification)
     private notificationRepository: Repository<Notification>,
     private readonly gateway: NotificationsGateway,
+    private dataSource: DataSource,
   ) {}
 
   async createNotification(
@@ -72,6 +73,34 @@ export class NotificationsService {
         this.gateway.sendNotification(userId, notifications.find(n => n.userId === userId));
       } catch (e) {}
     });
+  }
+
+  async broadcast(title: string, message: string) {
+    // 1. Fetch all active user IDs
+    const users = await this.dataSource.query('SELECT id, organizationId FROM user WHERE status = "ACTIVE" AND isDeleted = 0');
+    
+    if (!users || users.length === 0) return { success: true, count: 0 };
+
+    const notifications = users.map((u: any) => ({
+      organizationId: u.organizationId || 'SYSTEM',
+      userId: u.id,
+      title,
+      message,
+      type: 'SYSTEM',
+      isRead: false,
+    }));
+
+    // Insert in batches if large, but we'll do one bulk for now
+    await this.notificationRepository.insert(notifications);
+
+    // Try emitting to all connected users
+    users.forEach((u: any) => {
+      try {
+        this.gateway.sendNotification(u.id, notifications.find((n: any) => n.userId === u.id));
+      } catch (e) {}
+    });
+
+    return { success: true, count: users.length };
   }
 
   async getUserNotifications(

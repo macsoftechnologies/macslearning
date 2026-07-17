@@ -58,6 +58,7 @@ export class OrganizationsService {
         address: orgData.address,
       },
       subscriptionConfig: resolvedSubscriptionConfig,
+      subscriptionExpiresAt: resolvedSubscriptionConfig?.expiresAt,
     };
 
     const org = this.orgRepository.create(organizationPayload);
@@ -97,6 +98,12 @@ export class OrganizationsService {
       queryBuilder.andWhere('org.name LIKE :search', { search: `%${search}%` });
     }
 
+    if (queryDto.filter === 'expiring') {
+      const twentyDaysFromNow = new Date();
+      twentyDaysFromNow.setDate(twentyDaysFromNow.getDate() + 20);
+      queryBuilder.andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow });
+    }
+
     const [data, totalItems] = await queryBuilder.getManyAndCount();
 
     return createPaginatedResponse(data, totalItems, page, limit);
@@ -133,6 +140,46 @@ export class OrganizationsService {
     const org = await this.orgRepository.findOne({ where: { id: orgId } });
     if (!org) throw new NotFoundException('Organization not found');
     return org;
+  }
+
+  async extendSubscription(orgId: string, data: { planId?: string, paymentReferenceId?: string }) {
+    const org = await this.getOrganizationById(orgId);
+    let plan = null;
+    let planIdToUse = data.planId || org.subscriptionConfig?.planId;
+    
+    if (planIdToUse) {
+      plan = await this.subscriptionPlanRepository.findOne({ where: { id: planIdToUse } });
+    }
+
+    if (!plan) throw new NotFoundException('Subscription plan not found');
+
+    const durationDays = plan.durationInDays || 30;
+    
+    // If it's already expired or has no expiry, start from today. Otherwise, add to the current expiry.
+    const currentExpiry = org.subscriptionExpiresAt ? new Date(org.subscriptionExpiresAt) : new Date();
+    const startDate = currentExpiry < new Date() ? new Date() : currentExpiry;
+    
+    const newExpiresAt = new Date(startDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
+
+    const updatedConfig = {
+      ...org.subscriptionConfig,
+      planId: plan.id,
+      planType: plan.code,
+      durationInDays: durationDays,
+      maxStudents: plan.maxUsers ?? 0,
+      maxStorageGB: plan.storageGB ?? 0,
+      expiresAt: newExpiresAt
+    };
+
+    await this.orgRepository.update(orgId, {
+      subscriptionConfig: updatedConfig,
+      subscriptionExpiresAt: newExpiresAt,
+      paymentStatus: 'PAID',
+      lastPaymentDate: new Date(),
+      paymentReferenceId: data.paymentReferenceId || org.paymentReferenceId,
+    });
+
+    return this.getOrganizationById(orgId);
   }
 
   // --- Course Plans ---

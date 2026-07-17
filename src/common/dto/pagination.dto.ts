@@ -34,4 +34,9 @@ export class PaginationQueryDto {
   @IsOptional()
   @IsString()
   userType?: string;
+
+  @ApiPropertyOptional({ description: 'Generic filter (e.g. expiring)' })
+  @IsOptional()
+  @IsString()
+  filter?: string;
 }
