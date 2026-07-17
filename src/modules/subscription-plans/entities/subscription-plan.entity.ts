@@ -20,6 +20,9 @@ export class SubscriptionPlan {
   @Column({ type: 'int' })
   price: number;
 
+  @Column({ type: 'varchar', nullable: true })
+  regionId: string;
+
   @Column({ type: 'varchar', nullable: true, default: 'USD' })
   currency: string;
 

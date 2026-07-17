@@ -29,7 +29,6 @@ import { AuditService } from '../audit/audit.service';
 @ApiTags('Organizations')
 @ApiBearerAuth()
 @Controller('organizations')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class OrganizationsController {
   constructor(
     private readonly organizationsService: OrganizationsService,
@@ -37,6 +36,7 @@ export class OrganizationsController {
   ) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   @ApiOperation({ summary: 'Get all organizations with pagination and search' })
@@ -48,6 +48,7 @@ export class OrganizationsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async createOrganization(
@@ -65,6 +66,7 @@ export class OrganizationsController {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async updateStatus(
@@ -87,6 +89,7 @@ export class OrganizationsController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async updateOrganizationById(
@@ -109,6 +112,7 @@ export class OrganizationsController {
   }
 
   @Post(':id/extend-subscription')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async extendSubscription(
@@ -128,6 +132,7 @@ export class OrganizationsController {
   }
 
   @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER')
   async getMyOrganization(@Request() req: any) {
     return this.organizationsService.getOrganizationById(
@@ -136,6 +141,7 @@ export class OrganizationsController {
   }
 
   @Patch('me')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER')
   async updateMyOrganization(
     @Request() req: any,
@@ -157,12 +163,14 @@ export class OrganizationsController {
 
   // --- Course Plans ---
   @Get('me/course-plans')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER', 'FACULTY')
   async getMyCoursePlans(@Request() req: any) {
     return this.organizationsService.getCoursePlans(req.user.organizationId);
   }
 
   @Post('me/course-plans')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER')
   async createMyCoursePlan(@Request() req: any, @Body() planData: any) {
     return this.organizationsService.createCoursePlan(
@@ -172,6 +180,7 @@ export class OrganizationsController {
   }
 
   @Patch('me/course-plans/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER')
   async updateMyCoursePlan(
     @Request() req: any,
@@ -186,6 +195,7 @@ export class OrganizationsController {
   }
 
   @Delete('me/course-plans/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('ORG_USER')
   async deleteMyCoursePlan(
     @Request() req: any,
@@ -195,5 +205,11 @@ export class OrganizationsController {
       req.user.organizationId,
       planId,
     );
+  }
+
+  @Post('register')
+  @ApiOperation({ summary: 'Public endpoint to register a new organization and admin' })
+  async registerOrganization(@Body() registrationData: any) {
+    return this.organizationsService.registerOrganization(registrationData);
   }
 }

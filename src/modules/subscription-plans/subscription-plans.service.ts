@@ -19,9 +19,13 @@ export class SubscriptionPlansService {
     return this.subscriptionPlanRepository.save(plan);
   }
 
-  async getSubscriptionPlans() {
+  async getSubscriptionPlans(regionId?: string) {
+    const where: any = { isDeleted: false };
+    if (regionId) {
+      where.regionId = regionId;
+    }
     return this.subscriptionPlanRepository.find({
-      where: { isDeleted: false },
+      where,
       order: { createdAt: 'DESC' },
     });
   }

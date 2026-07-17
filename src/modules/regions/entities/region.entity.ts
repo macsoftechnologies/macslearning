@@ -17,6 +17,9 @@ export class Region {
   @Column({ type: 'varchar' })
   orgId: string;
 
+  @Column({ type: 'boolean', default: false })
+  isGlobal: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

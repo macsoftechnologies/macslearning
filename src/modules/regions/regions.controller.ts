@@ -25,15 +25,15 @@ export class RegionsController {
   @Roles('SUPER_ADMIN', 'ORG_USER')
   @Post()
   create(@Body() createRegionDto: CreateRegionDto, @Request() req: any) {
-    // Assuming req.user contains the user info including organizationId
     const orgId = req.user.organizationId;
-    return this.regionsService.create(createRegionDto, orgId);
+    const isSuperAdmin = req.user.userType === 'SUPER_ADMIN';
+    return this.regionsService.create(createRegionDto, orgId, isSuperAdmin);
   }
 
   // Get all regions. Publicly accessible for registration dropdown.
   @Get()
-  findAll(@Query('orgId') orgId?: string, @Query('slug') slug?: string) {
-    return this.regionsService.findAll(orgId, slug);
+  findAll(@Query('orgId') orgId?: string, @Query('slug') slug?: string, @Query('globalOnly') globalOnly?: boolean) {
+    return this.regionsService.findAll(orgId, slug, globalOnly);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

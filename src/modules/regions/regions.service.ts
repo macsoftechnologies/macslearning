@@ -16,30 +16,52 @@ export class RegionsService {
   async create(
     createRegionDto: CreateRegionDto,
     orgId: string,
+    isSuperAdmin: boolean = false
   ): Promise<Region> {
+    const isGlobal = isSuperAdmin && createRegionDto.isGlobal;
     const createdRegion = this.regionRepository.create({
       ...createRegionDto,
-      orgId,
+      orgId: isGlobal ? 'GLOBAL' : orgId,
+      isGlobal: !!isGlobal
     });
     return this.regionRepository.save(createdRegion);
   }
 
-  async findAll(orgId?: string, slug?: string): Promise<Region[]> {
+  async findAll(orgId?: string, slug?: string, globalOnly?: boolean): Promise<Region[]> {
+    if (globalOnly) {
+      return this.regionRepository.find({ where: { isGlobal: true } });
+    }
+
     let targetOrgId = orgId;
     if (!targetOrgId && slug) {
       const org = await this.orgRepository.findOne({ where: { slug, isDeleted: false } });
       if (org) targetOrgId = org.id;
     }
-    if (!targetOrgId) {
-      return [];
+    
+    // Always include global regions when fetching for an org or if explicitly fetching global
+    if (targetOrgId === 'GLOBAL') {
+      return this.regionRepository.find({ where: { isGlobal: true } });
     }
-    const filter = { orgId: targetOrgId };
-    return this.regionRepository.find({ where: filter });
+
+    if (!targetOrgId) {
+      return this.regionRepository.find({ where: { isGlobal: true } });
+    }
+
+    // Return both local regions and global regions
+    return this.regionRepository.find({
+      where: [
+        { orgId: targetOrgId },
+        { isGlobal: true }
+      ]
+    });
   }
 
   async findOne(id: string, orgId?: string): Promise<Region> {
-    const where: any = { id };
-    if (orgId) where.orgId = orgId;
+    const where: any = [{ id, isGlobal: true }];
+    if (orgId) {
+      where.push({ id, orgId });
+    }
+    
     const region = await this.regionRepository.findOne({ where });
     if (!region) {
       throw new NotFoundException(`Region with ID ${id} not found`);

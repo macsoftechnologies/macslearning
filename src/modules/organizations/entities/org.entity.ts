@@ -18,6 +18,9 @@ export class Organization {
   code: string;
 
   @Column({ type: 'varchar', nullable: true })
+  regionId: string;
+
+  @Column({ type: 'varchar', nullable: true })
   logoUrl: string;
 
   @Column({ type: 'varchar', nullable: true })

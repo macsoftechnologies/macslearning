@@ -24,13 +24,13 @@ import { SubscriptionPlansService } from './subscription-plans.service';
 @ApiTags('Subscription Plans')
 @ApiBearerAuth()
 @Controller('subscription-plans')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class SubscriptionPlansController {
   constructor(
     private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async createSubscriptionPlan(@Body() planData: CreateSubscriptionPlanDto) {
@@ -38,13 +38,21 @@ export class SubscriptionPlansController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
-  async getSubscriptionPlans() {
-    return this.subscriptionPlansService.getSubscriptionPlans();
+  async getSubscriptionPlans(@Query('regionId') regionId?: string) {
+    return this.subscriptionPlansService.getSubscriptionPlans(regionId);
+  }
+
+  @Get('public')
+  async getPublicSubscriptionPlans(@Query('regionId') regionId?: string) {
+    const plans = await this.subscriptionPlansService.getSubscriptionPlans(regionId);
+    return plans.filter(p => p.isActive);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async getSubscriptionPlanById(@Param('id') planId: string) {
@@ -52,6 +60,7 @@ export class SubscriptionPlansController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async updateSubscriptionPlan(
@@ -65,6 +74,7 @@ export class SubscriptionPlansController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
   async deleteSubscriptionPlan(@Param('id') planId: string) {

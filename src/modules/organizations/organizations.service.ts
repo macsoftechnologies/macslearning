@@ -55,6 +55,7 @@ export class OrganizationsService {
     const initialStatus = orgData.paymentStatus === 'PENDING' ? 'INACTIVE' : 'ACTIVE';
     const organizationPayload = {
       ...orgData,
+      regionId: orgData.regionId,
       status: initialStatus,
       domain,
       slug: orgData.code.toLowerCase(),
@@ -109,6 +110,8 @@ export class OrganizationsService {
       const twentyDaysFromNow = new Date();
       twentyDaysFromNow.setDate(twentyDaysFromNow.getDate() + 20);
       queryBuilder.andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow });
+    } else if (queryDto.filter === 'pending') {
+      queryBuilder.andWhere('org.status = :status', { status: 'INACTIVE' });
     }
 
     const [data, totalItems] = await queryBuilder.getManyAndCount();
@@ -228,5 +231,19 @@ export class OrganizationsService {
     if (result.affected === 0)
       throw new NotFoundException('Course plan not found');
     return { success: true };
+  }
+  async registerOrganization(registrationData: any) {
+    const orgData = {
+      name: registrationData.orgName,
+      code: registrationData.orgCode,
+      regionId: registrationData.regionId,
+      paymentStatus: 'PENDING',
+      subscriptionPlanId: registrationData.planId,
+      adminEmail: registrationData.email,
+      adminPassword: registrationData.password,
+      adminFullName: registrationData.fullName,
+      adminMobile: registrationData.mobile,
+    };
+    return this.createOrganization(orgData);
   }
 }
