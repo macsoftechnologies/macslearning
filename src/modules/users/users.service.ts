@@ -175,16 +175,21 @@ export class UsersService {
     return createPaginatedResponse(safeData, totalItems, page, limit);
   }
 
-  async getUsers(queryDto: PaginationQueryDto & { userType?: string }) {
-    const { page = 1, limit = 10, search, userType } = queryDto;
+  async getUsers(queryDto: PaginationQueryDto & { userType?: string; organizationId?: string }) {
+    const { page = 1, limit = 10, search, userType, organizationId } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
-      .where('user.isDeleted = :isDeleted', { isDeleted: false });
+      .where('user.isDeleted = :isDeleted', { isDeleted: false })
+      .andWhere('user.userType != :rootRole', { rootRole: 'SUPER_ADMIN' });
 
     if (userType) {
       queryBuilder.andWhere('user.userType = :userType', { userType });
+    }
+
+    if (organizationId) {
+      queryBuilder.andWhere('user.organizationId = :organizationId', { organizationId });
     }
 
     queryBuilder
@@ -201,9 +206,29 @@ export class UsersService {
 
     const [data, totalItems] = await queryBuilder.getManyAndCount();
 
+    let orgsMap: Record<string, string> = {};
+    try {
+      const orgIds = Array.from(new Set(data.map(u => u.organizationId).filter(id => id)));
+      if (orgIds.length > 0) {
+        const orgRepo = this.dataSource.getRepository('Organization');
+        const orgs = await orgRepo.find({
+          where: { id: In(orgIds) },
+          select: { id: true, name: true }
+        });
+        orgs.forEach(org => {
+          orgsMap[org.id] = org.name;
+        });
+      }
+    } catch (e) {
+      // Ignore if repo not found or other errors
+    }
+
     const safeData = data.map((user) => {
       const { passwordHash, refreshTokens, ...rest } = user;
-      return rest;
+      return {
+        ...rest,
+        organizationName: rest.organizationId ? orgsMap[rest.organizationId] : null
+      };
     });
 
     return createPaginatedResponse(safeData, totalItems, page, limit);

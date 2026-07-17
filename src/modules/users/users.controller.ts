@@ -158,7 +158,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Get all users in organization with pagination and search',
   })
-  async getUsers(@Request() req: any, @Query() query: PaginationQueryDto & { userType?: string }) {
+  async getUsers(@Request() req: any, @Query() query: PaginationQueryDto & { userType?: string; organizationId?: string }) {
     if (req.user.userType === 'SUPER_ADMIN') {
       return this.usersService.getUsers(query);
     }
