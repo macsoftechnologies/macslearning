@@ -14,7 +14,7 @@ export class SubscriptionPlan {
   @Column({ type: 'varchar' })
   name: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
   code: string;
 
   @Column({ type: 'int' })
