@@ -64,13 +64,19 @@ export class OrganizationsService {
     const savedOrg = await this.orgRepository.save(org as any);
 
     if (orgData.adminEmail && orgData.adminPassword) {
-      await this.usersService.createUser(savedOrg.id, {
-        email: orgData.adminEmail,
-        password: orgData.adminPassword,
-        fullName: orgData.adminFullName || 'Org Admin',
-        mobile: orgData.adminMobile,
-        userType: 'ORG_USER',
-      });
+      try {
+        await this.usersService.createUser(savedOrg.id, {
+          email: orgData.adminEmail,
+          password: orgData.adminPassword,
+          fullName: orgData.adminFullName || 'Org Admin',
+          mobile: orgData.adminMobile,
+          userType: 'ORG_USER',
+        });
+      } catch (error) {
+        // Rollback: delete the organization if admin creation fails
+        await this.orgRepository.delete(savedOrg.id);
+        throw error;
+      }
     }
 
     return savedOrg;

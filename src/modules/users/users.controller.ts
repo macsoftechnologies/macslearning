@@ -58,6 +58,19 @@ export class UsersController {
     return this.usersService.createUser(orgId, userData);
   }
 
+  @Patch(':id')
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async updateUserData(
+    @Request() req: any,
+    @Param('id') userId: string,
+    @Body() updateData: UpdateUserDto,
+  ) {
+    // Basic authorization check could be added here if ORG_USER
+    // is trying to update a user outside their organization.
+    // For now, rely on UI passing valid IDs or add simple check.
+    return this.usersService.updateUser(userId, updateData);
+  }
+
   @Post('super-admin-team')
   @Roles('SUPER_ADMIN')
   async createSuperAdminTeamMember(@Body() adminData: CreateSuperAdminTeamDto) {

@@ -86,6 +86,28 @@ export class OrganizationsController {
     return org;
   }
 
+  @Patch(':id')
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
+  async updateOrganizationById(
+    @Request() req: any,
+    @Param('id') orgId: string,
+    @Body() updateData: UpdateOrganizationDto,
+  ) {
+    const org = await this.organizationsService.updateOrganization(
+      orgId,
+      updateData,
+    );
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: orgId,
+      action: 'Organization Updated',
+      targetId: org.id,
+      metadata: { name: org.name },
+    });
+    return org;
+  }
+
   @Get('me')
   @Roles('ORG_USER')
   async getMyOrganization(@Request() req: any) {
