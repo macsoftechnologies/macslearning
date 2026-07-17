@@ -45,6 +45,7 @@ export class Organization {
   @Column({ type: 'json', nullable: true })
   subscriptionConfig: any;
 
+  /*
   @Column({
     type: 'enum',
     enum: ['PAID', 'PENDING', 'OVERDUE'],
@@ -60,6 +61,7 @@ export class Organization {
 
   @Column({ type: 'varchar', nullable: true })
   receiptUrl: string;
+  */
 
   @Column({ type: 'timestamp', nullable: true })
   subscriptionExpiresAt: Date;

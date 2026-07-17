@@ -10,13 +10,23 @@ import {
 import { PaymentService } from './payment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../../common/constants/permissions.constant';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @Controller('payments')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
+
+  @Get('super-admin')
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_FINANCE)
+  async getSuperAdminPayments(@Query() query: PaginationQueryDto) {
+    return this.paymentService.getSuperAdminPayments(query);
+  }
 
   @Get()
   @Roles('ORG_USER', 'FINANCE')

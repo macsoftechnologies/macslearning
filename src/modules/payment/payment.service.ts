@@ -62,6 +62,51 @@ export class PaymentService {
     return createPaginatedResponse(mappedData, totalItems, page, limit);
   }
 
+  async getSuperAdminPayments(queryDto: PaginationQueryDto) {
+    const { page = 1, limit = 10, search } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoin(User, 'student', 'student.id = payment.studentId')
+      .leftJoin(Course, 'course', 'course.id = payment.courseId')
+      .select([
+        'payment.*',
+        'student.id as student_id',
+        'student.fullName as student_fullName',
+        'student.email as student_email',
+        'course.id as course_id',
+        'course.title as course_title',
+      ]);
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(payment.invoiceNumber LIKE :search OR payment.dummyPaymentId LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const dataRaw = await queryBuilder
+      .orderBy('payment.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getRawMany();
+    const totalItems = await queryBuilder.getCount();
+
+    const mappedData = dataRaw.map((d) => ({
+      ...d,
+      studentId: {
+        _id: d.student_id,
+        id: d.student_id,
+        fullName: d.student_fullName,
+        email: d.student_email,
+      },
+      courseId: { _id: d.course_id, id: d.course_id, title: d.course_title },
+    }));
+
+    return createPaginatedResponse(mappedData, totalItems, page, limit);
+  }
+
   async getMyPayments(
     organizationId: string,
     studentId: string,
