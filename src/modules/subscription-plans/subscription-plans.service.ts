@@ -20,14 +20,28 @@ export class SubscriptionPlansService {
   }
 
   async getSubscriptionPlans(regionId?: string) {
-    const where: any = { isDeleted: false };
-    if (regionId) {
-      where.regionId = regionId;
-    }
-    return this.subscriptionPlanRepository.find({
-      where,
+    const plans = await this.subscriptionPlanRepository.find({
+      where: { isDeleted: false },
       order: { createdAt: 'DESC' },
     });
+    
+    if (!regionId) return plans;
+
+    // Filter and map prices for the specific region
+    const regionalPlans = [];
+    for (const plan of plans) {
+      if (plan.regionalPrices && Array.isArray(plan.regionalPrices)) {
+        const regionalConfig = plan.regionalPrices.find(rp => rp.regionId === regionId);
+        if (regionalConfig) {
+          regionalPlans.push({
+            ...plan,
+            price: regionalConfig.price,
+            currency: regionalConfig.currency || 'USD'
+          });
+        }
+      }
+    }
+    return regionalPlans;
   }
 
   async getSubscriptionPlanById(planId: string) {

@@ -17,14 +17,17 @@ export class SubscriptionPlan {
   @Column({ type: 'varchar' })
   code: string;
 
-  @Column({ type: 'int' })
+  @Column({ type: 'int', nullable: true })
   price: number;
 
   @Column({ type: 'varchar', nullable: true })
   regionId: string;
 
-  @Column({ type: 'varchar', nullable: true, default: 'USD' })
+  @Column({ type: 'varchar', nullable: true })
   currency: string;
+
+  @Column({ type: 'json', nullable: true })
+  regionalPrices: any[];
 
   @Column({ type: 'int', default: 30 })
   durationInDays: number;

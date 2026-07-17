@@ -16,12 +16,15 @@ export class CreateSubscriptionPlanDto {
   code: string;
 
   @IsNumber()
-  @IsNotEmpty()
-  price: number;
+  @IsOptional()
+  price?: number;
 
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsOptional()
+  regionalPrices?: any[];
 
   @IsNumber()
   @IsOptional()
@@ -59,6 +62,9 @@ export class UpdateSubscriptionPlanDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsOptional()
+  regionalPrices?: any[];
 
   @IsNumber()
   @IsOptional()
