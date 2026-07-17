@@ -41,6 +41,8 @@ export class OrganizationsService {
           durationInDays: plan.durationInDays || 30,
           maxStudents: plan.maxUsers ?? 0,
           maxStorageGB: plan.storageGB ?? 0,
+          price: plan.price ?? 0,
+          currency: plan.currency || 'USD',
           expiresAt,
           paymentStatus: orgData.paymentStatus,
           lastPaymentDate: orgData.lastPaymentDate,
@@ -173,6 +175,8 @@ export class OrganizationsService {
       durationInDays: durationDays,
       maxStudents: plan.maxUsers ?? 0,
       maxStorageGB: plan.storageGB ?? 0,
+      price: plan.price ?? 0,
+      currency: plan.currency || 'USD',
       expiresAt: newExpiresAt
     };
 
