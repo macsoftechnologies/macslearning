@@ -24,15 +24,23 @@ export class ResultsService {
     const results = await this.resultRepository
       .createQueryBuilder('result')
       .leftJoin(Exam, 'exam', 'exam.id = result.examId')
+      .leftJoin(Course, 'course', 'course.id = result.courseId')
       .where('result.organizationId = :organizationId', { organizationId })
       .andWhere('result.studentId = :studentId', { studentId })
       .andWhere('result.isPublished = :isPublished', { isPublished: true })
-      .select(['result.*', 'exam.id as exam_id', 'exam.title as exam_title'])
+      .select([
+        'result.*', 
+        'exam.id as exam_id', 
+        'exam.title as exam_title',
+        'course.id as course_id',
+        'course.title as course_title'
+      ])
       .getRawMany();
 
     return results.map((r) => ({
       ...r,
       examId: { _id: r.exam_id, id: r.exam_id, title: r.exam_title },
+      courseId: { _id: r.course_id, id: r.course_id, title: r.course_title },
     }));
   }
 
