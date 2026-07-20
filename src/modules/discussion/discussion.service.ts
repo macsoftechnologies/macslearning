@@ -83,6 +83,14 @@ export class DiscussionService {
         'author.email as author_email',
         'author.userType as author_userType',
       ])
+      .addSelect(
+        (subQuery) =>
+          subQuery
+            .select('COUNT(reply.id)', 'actualReplyCount')
+            .from(Reply, 'reply')
+            .where('reply.threadId = thread.id'),
+        'actualReplyCount',
+      )
       .orderBy('thread.createdAt', 'DESC');
 
     if (lessonId) {
