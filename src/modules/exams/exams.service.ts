@@ -437,6 +437,7 @@ export class ExamsService {
     const results = await this.resultRepository
       .createQueryBuilder('result')
       .leftJoin(User, 'student', 'student.id = result.studentId')
+      .leftJoin(Attempt, 'attempt', 'attempt.id = result.attemptId')
       .where('result.organizationId = :organizationId', { organizationId })
       .andWhere('result.examId = :examId', { examId })
       .select([
@@ -444,18 +445,30 @@ export class ExamsService {
         'student.id as student_id',
         'student.fullName as student_fullName',
         'student.email as student_email',
+        'attempt.answers as attempt_answers'
       ])
       .getRawMany();
 
-    return results.map((r) => ({
-      ...r,
-      studentId: {
-        _id: r.student_id,
-        id: r.student_id,
-        fullName: r.student_fullName,
-        email: r.student_email,
-      },
-    }));
+    return results.map((r) => {
+      let needsGrading = false;
+      try {
+        const answers = typeof r.attempt_answers === 'string' ? JSON.parse(r.attempt_answers) : (r.attempt_answers || []);
+        needsGrading = answers.some((a: any) => a.isGraded === false);
+      } catch (e) {
+        // ignore
+      }
+
+      return {
+        ...r,
+        needsGrading,
+        studentId: {
+          _id: r.student_id,
+          id: r.student_id,
+          fullName: r.student_fullName,
+          email: r.student_email,
+        },
+      };
+    });
   }
 
   async getAttemptReview(
