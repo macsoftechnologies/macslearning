@@ -121,13 +121,17 @@ export class ResultsService {
       .getRawMany();
 
     return results.map((r) => {
-      const isPassedRaw = r.isPassed ?? r.result_isPassed ?? r.result_ispassed;
-      const isPublishedRaw = r.isPublished ?? r.result_isPublished ?? r.result_ispublished;
+      const keys = Object.keys(r);
+      const isPassedKey = keys.find(k => k.toLowerCase().endsWith('ispassed'));
+      const isPublishedKey = keys.find(k => k.toLowerCase().endsWith('ispublished'));
+      
+      const isPassedRaw = isPassedKey ? r[isPassedKey] : false;
+      const isPublishedRaw = isPublishedKey ? r[isPublishedKey] : false;
       
       return {
         ...r,
-        isPassed: isPassedRaw === true || isPassedRaw === 1 || isPassedRaw === '1',
-        isPublished: isPublishedRaw === true || isPublishedRaw === 1 || isPublishedRaw === '1',
+        isPassed: !!isPassedRaw && isPassedRaw !== '0' && isPassedRaw !== 0 && isPassedRaw !== 'false',
+        isPublished: !!isPublishedRaw && isPublishedRaw !== '0' && isPublishedRaw !== 0 && isPublishedRaw !== 'false',
         studentId: {
           _id: r.student_id,
           id: r.student_id,
