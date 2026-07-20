@@ -20,7 +20,7 @@ export class Course {
   @Column({ type: 'varchar', nullable: true })
   slug: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'text', nullable: true })
   description: string;
 
   @Column({

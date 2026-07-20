@@ -23,7 +23,7 @@ export class Assignment {
   @Column({ type: 'varchar' })
   title: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'text', nullable: true })
   description: string;
 
   @Column({ type: 'varchar', nullable: true })

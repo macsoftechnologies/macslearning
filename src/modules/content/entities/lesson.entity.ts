@@ -23,7 +23,7 @@ export class Lesson {
   @Column({ type: 'varchar' })
   title: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'text', nullable: true })
   description: string;
 
   @Column({ type: 'enum', enum: ['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE'] })
