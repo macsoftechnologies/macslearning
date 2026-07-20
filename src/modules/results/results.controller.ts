@@ -34,7 +34,7 @@ export class ResultsController {
   }
 
   @Get('courses/:courseId')
-  @Roles('ORG_USER')
+  @Roles('ORG_USER', 'FACULTY')
   async getCourseResults(
     @Request() req: any,
     @Param('courseId') courseId: string,
