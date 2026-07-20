@@ -85,8 +85,12 @@ export class CreateCourseDto {
 }
 
 export class UpdateCourseStatusDto {
-  @IsEnum(['DRAFT', 'PUBLISHED', 'ARCHIVED'])
+  @IsEnum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'])
   status: string;
+
+  @IsString()
+  @IsOptional()
+  reviewNotes?: string;
 }
 
 export class UpdateCourseDto {
@@ -98,9 +102,13 @@ export class UpdateCourseDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(['DRAFT', 'PUBLISHED', 'ARCHIVED'])
+  @IsEnum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'])
   @IsOptional()
   status?: string;
+
+  @IsString()
+  @IsOptional()
+  reviewNotes?: string;
 
   @IsOptional()
   @ValidateNested()

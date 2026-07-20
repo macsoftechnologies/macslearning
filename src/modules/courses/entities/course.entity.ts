@@ -27,7 +27,7 @@ export class Course {
     type: 'enum',
     nullable: true,
     default: 'DRAFT',
-    enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'],
+    enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'],
   })
   status: string;
 
@@ -70,6 +70,9 @@ export class Course {
     enum: ['AUTO', 'MANUAL_APPROVAL'],
   })
   certificateIssueMode: string;
+
+  @Column({ type: 'text', nullable: true })
+  reviewNotes: string;
 
   @CreateDateColumn()
   createdAt: Date;

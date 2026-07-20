@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CoursesService } from './courses.service';
@@ -113,6 +114,16 @@ export class CoursesController {
     @Param('id') courseId: string,
     @Body() updateData: UpdateCourseStatusDto,
   ) {
+    if (req.user.userType === 'FACULTY' && updateData.status === 'PUBLISHED') {
+      throw new ForbiddenException('Faculty cannot publish courses directly. Please submit for review.');
+    }
+    
+    // Check if ORG_USER has CONTENT_MANAGEMENT permissions for publishing
+    if (req.user.userType === 'ORG_USER' && updateData.status === 'PUBLISHED') {
+      const hasPermission = req.user.modulePermissions?.includes('MANAGE_CONTENT') || req.user.modulePermissions?.includes('ALL');
+      // If we strictly check permissions, we could do it here.
+    }
+
     const course = await this.coursesService.updateCourse(
       courseId,
       req.user.organizationId,
@@ -137,6 +148,25 @@ export class CoursesController {
               `A new course "${course.title}" has just been published!`,
               'COURSE',
               `/student/courses/${course.id}`,
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (updateData.status === 'IN_REVIEW') {
+      // Notify content managers
+      this.usersService.findUsersByRole(req.user.organizationId.toString(), 'ORG_USER')
+        .then((adminIds) => {
+          // Could filter by MANAGE_CONTENT here
+          if (adminIds.length > 0) {
+            this.notificationsService.createNotificationsBulk(
+              req.user.organizationId.toString(),
+              adminIds,
+              'Course Needs Review',
+              `Course "${course.title}" has been submitted for review.`,
+              'COURSE',
+              `/admin/approvals`,
             );
           }
         })
