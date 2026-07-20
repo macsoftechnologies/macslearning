@@ -143,7 +143,7 @@ export class OrganizationsController {
   async extendSubscription(
     @Request() req: any,
     @Param('id') orgId: string,
-    @Body() data: { planId?: string, paymentReferenceId?: string },
+    @Body() data: { planId?: string, paymentReferenceId?: string, paymentStatus?: string, lastPaymentDate?: string },
   ) {
     const org = await this.organizationsService.extendSubscription(orgId, data);
     await this.auditService.createLog({

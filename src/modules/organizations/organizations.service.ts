@@ -191,7 +191,7 @@ export class OrganizationsService {
     return { success: true };
   }
 
-  async extendSubscription(orgId: string, data: { planId?: string, paymentReferenceId?: string }) {
+  async extendSubscription(orgId: string, data: { planId?: string, paymentReferenceId?: string, paymentStatus?: string, lastPaymentDate?: string }) {
     const org = await this.getOrganizationById(orgId);
     let plan = null;
     let planIdToUse = data.planId || org.subscriptionConfig?.planId;
@@ -232,6 +232,10 @@ export class OrganizationsService {
       currency: finalCurrency,
       expiresAt: newExpiresAt
     };
+
+    if (data.paymentStatus !== undefined) updatedConfig.paymentStatus = data.paymentStatus;
+    if (data.lastPaymentDate !== undefined) updatedConfig.lastPaymentDate = data.lastPaymentDate;
+    if (data.paymentReferenceId !== undefined) updatedConfig.paymentReferenceId = data.paymentReferenceId;
 
     await this.orgRepository.update(orgId, {
       subscriptionConfig: updatedConfig,
