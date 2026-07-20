@@ -15,6 +15,10 @@ export class CreateOrganizationDto {
 
   @IsString()
   @IsOptional()
+  regionId?: string;
+
+  @IsString()
+  @IsOptional()
   logoUrl?: string;
 
   @IsOptional()
