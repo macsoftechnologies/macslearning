@@ -80,7 +80,16 @@ export class CoursesService {
         queryBuilder.andWhere('course.status = :status', { status });
       }
     } else if (status) {
-      queryBuilder.andWhere('course.status = :status', { status });
+      if (status === 'IN_REVIEW') {
+        queryBuilder.andWhere(`
+          (course.status = 'IN_REVIEW' OR 
+           EXISTS (SELECT 1 FROM coursemodules cm WHERE cm.courseId = course.id AND cm.contentStatus = 'IN_REVIEW') OR
+           EXISTS (SELECT 1 FROM lessons l WHERE l.courseId = course.id AND l.contentStatus = 'IN_REVIEW') OR
+           EXISTS (SELECT 1 FROM exams e WHERE e.courseId = course.id AND e.status = 'IN_REVIEW'))
+        `);
+      } else {
+        queryBuilder.andWhere('course.status = :status', { status });
+      }
     }
 
     if (search) {

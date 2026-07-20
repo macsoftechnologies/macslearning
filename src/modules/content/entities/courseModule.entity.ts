@@ -29,6 +29,17 @@ export class CourseModule {
   @Column({ type: 'boolean', nullable: true, default: false })
   isDeleted: boolean;
 
+  @Column({
+    type: 'enum',
+    nullable: true,
+    default: 'PUBLISHED',
+    enum: ['IN_REVIEW', 'PUBLISHED'],
+  })
+  contentStatus: string;
+
+  @Column({ type: 'text', nullable: true })
+  reviewNotes: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

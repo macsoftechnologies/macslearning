@@ -76,12 +76,33 @@ export class ExamsService {
       );
     }
 
+    const course = await this.coursesService.getCourseById(exam.courseId, organizationId);
+    const newStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
+
+    await this.examRepository.update(
+      { id: examId, organizationId },
+      { status: newStatus },
+    );
+
+    exam.status = newStatus;
+    return exam;
+  }
+
+  async approveExam(organizationId: string, examId: string) {
     await this.examRepository.update(
       { id: examId, organizationId },
       { status: 'PUBLISHED' },
     );
+    const exam = await this.examRepository.findOne({ where: { id: examId, organizationId }});
+    return exam;
+  }
 
-    exam.status = 'PUBLISHED';
+  async rejectExam(organizationId: string, examId: string, reason: string) {
+    await this.examRepository.update(
+      { id: examId, organizationId },
+      { status: 'DRAFT', reviewNotes: reason },
+    );
+    const exam = await this.examRepository.findOne({ where: { id: examId, organizationId }});
     return exam;
   }
 

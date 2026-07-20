@@ -62,7 +62,7 @@ export class ContentController {
         courseId,
       );
     }
-    return this.contentService.getModules(courseId, req.user.organizationId);
+    return this.contentService.getModules(courseId, req.user.organizationId, req.user.userType);
   }
 
   @Post('modules/:moduleId/lessons')
@@ -137,6 +137,7 @@ export class ContentController {
       courseId,
       moduleId,
       req.user.organizationId,
+      req.user.userType,
     );
   }
 
@@ -167,6 +168,37 @@ export class ContentController {
       req.user.organizationId,
       courseId,
       moduleId,
+    );
+  }
+
+  @Patch('modules/:moduleId/approve')
+  @Roles('ORG_USER')
+  async approveModule(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+  ) {
+    return this.contentService.updateModule(
+      req.user.organizationId,
+      courseId,
+      moduleId,
+      { contentStatus: 'PUBLISHED' },
+    );
+  }
+
+  @Patch('modules/:moduleId/reject')
+  @Roles('ORG_USER')
+  async rejectModule(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.contentService.updateModule(
+      req.user.organizationId,
+      courseId,
+      moduleId,
+      { reviewNotes: reason },
     );
   }
 
@@ -201,6 +233,41 @@ export class ContentController {
       courseId,
       moduleId,
       lessonId,
+    );
+  }
+
+  @Patch('modules/:moduleId/lessons/:lessonId/approve')
+  @Roles('ORG_USER')
+  async approveLesson(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @Param('lessonId') lessonId: string,
+  ) {
+    return this.contentService.updateLesson(
+      req.user.organizationId,
+      courseId,
+      moduleId,
+      lessonId,
+      { contentStatus: 'PUBLISHED' },
+    );
+  }
+
+  @Patch('modules/:moduleId/lessons/:lessonId/reject')
+  @Roles('ORG_USER')
+  async rejectLesson(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('moduleId') moduleId: string,
+    @Param('lessonId') lessonId: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.contentService.updateLesson(
+      req.user.organizationId,
+      courseId,
+      moduleId,
+      lessonId,
+      { reviewNotes: reason },
     );
   }
 

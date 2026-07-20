@@ -39,9 +39,12 @@ export class Exam {
     type: 'enum',
     nullable: true,
     default: 'DRAFT',
-    enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'],
+    enum: ['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'],
   })
   status: string;
+
+  @Column({ type: 'text', nullable: true })
+  reviewNotes: string;
 
   @Column({ type: 'boolean', nullable: true, default: false })
   isFinalExam: boolean;

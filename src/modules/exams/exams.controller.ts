@@ -74,6 +74,18 @@ export class ExamsController {
     return this.examsService.publishExam(req.user.organizationId, examId);
   }
 
+  @Patch('exams/:examId/approve')
+  @Roles('ORG_USER')
+  async approveExam(@Request() req: any, @Param('examId') examId: string) {
+    return this.examsService.approveExam(req.user.organizationId, examId);
+  }
+
+  @Patch('exams/:examId/reject')
+  @Roles('ORG_USER')
+  async rejectExam(@Request() req: any, @Param('examId') examId: string, @Body('reason') reason: string) {
+    return this.examsService.rejectExam(req.user.organizationId, examId, reason);
+  }
+
   @Post('exams/:examId/questions')
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async addQuestion(

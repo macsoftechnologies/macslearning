@@ -40,18 +40,26 @@ export class ContentService {
     courseId: string,
     moduleData: any,
   ) {
+    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
+
     const courseModule = this.moduleRepository.create({
       ...moduleData,
       organizationId,
       courseId,
+      contentStatus,
       orderIndex: moduleData.orderIndex ?? moduleData.order,
     });
     return this.moduleRepository.save(courseModule);
   }
 
-  async getModules(courseId: string, organizationId: string) {
+  async getModules(courseId: string, organizationId: string, userType?: string) {
+    const whereClause: any = { courseId, organizationId, isDeleted: false };
+    if (userType === 'STUDENT') {
+      whereClause.contentStatus = 'PUBLISHED';
+    }
     return this.moduleRepository.find({
-      where: { courseId, organizationId, isDeleted: false },
+      where: whereClause,
       order: { orderIndex: 'ASC' },
     });
   }
@@ -62,19 +70,27 @@ export class ContentService {
     moduleId: string,
     lessonData: any,
   ) {
+    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
+
     const lesson = this.lessonRepository.create({
       ...lessonData,
       organizationId,
       courseId,
       moduleId,
+      contentStatus,
       orderIndex: lessonData.orderIndex ?? lessonData.order,
     });
     return this.lessonRepository.save(lesson);
   }
 
-  async getLessons(courseId: string, moduleId: string, organizationId: string) {
+  async getLessons(courseId: string, moduleId: string, organizationId: string, userType?: string) {
+    const whereClause: any = { courseId, moduleId, organizationId, isDeleted: false };
+    if (userType === 'STUDENT') {
+      whereClause.contentStatus = 'PUBLISHED';
+    }
     return this.lessonRepository.find({
-      where: { courseId, moduleId, organizationId, isDeleted: false },
+      where: whereClause,
       order: { orderIndex: 'ASC' },
     });
   }
@@ -85,6 +101,11 @@ export class ContentService {
     moduleId: string,
     updateData: any,
   ) {
+    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
+      updateData.contentStatus = 'IN_REVIEW';
+    }
+    
     await this.moduleRepository.update(
       { id: moduleId, courseId, organizationId, isDeleted: false },
       updateData,
@@ -119,6 +140,11 @@ export class ContentService {
     lessonId: string,
     updateData: any,
   ) {
+    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
+      updateData.contentStatus = 'IN_REVIEW';
+    }
+
     await this.lessonRepository.update(
       { id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
       updateData,
