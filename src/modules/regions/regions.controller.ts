@@ -32,8 +32,9 @@ export class RegionsController {
 
   // Get all regions. Publicly accessible for registration dropdown.
   @Get()
-  findAll(@Query('orgId') orgId?: string, @Query('slug') slug?: string, @Query('globalOnly') globalOnly?: boolean) {
-    return this.regionsService.findAll(orgId, slug, globalOnly);
+  findAll(@Query('orgId') orgId?: string, @Query('slug') slug?: string, @Query('globalOnly') globalOnly?: boolean, @Query('localOnly') localOnly?: string) {
+    const isLocal = localOnly === 'true';
+    return this.regionsService.findAll(orgId, slug, globalOnly, isLocal);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

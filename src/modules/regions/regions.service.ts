@@ -27,7 +27,7 @@ export class RegionsService {
     return this.regionRepository.save(createdRegion);
   }
 
-  async findAll(orgId?: string, slug?: string, globalOnly?: boolean): Promise<Region[]> {
+  async findAll(orgId?: string, slug?: string, globalOnly?: boolean, localOnly?: boolean): Promise<Region[]> {
     if (globalOnly) {
       return this.regionRepository.find({ where: { isGlobal: true } });
     }
@@ -45,6 +45,10 @@ export class RegionsService {
 
     if (!targetOrgId) {
       return this.regionRepository.find({ where: { isGlobal: true } });
+    }
+
+    if (localOnly) {
+      return this.regionRepository.find({ where: { orgId: targetOrgId } });
     }
 
     // Return both local regions and global regions
