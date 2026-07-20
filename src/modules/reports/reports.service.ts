@@ -98,21 +98,15 @@ export class ReportsService {
       .getMany();
 
     let totalRevenue = 0;
-    if (orgsWithPlans.length > 0) {
-      const planIds = orgsWithPlans.map(org => org.subscriptionConfig?.planId).filter(Boolean);
-      if (planIds.length > 0) {
-        const plans = await this.orgRepository.manager.query(
-          `SELECT id, price FROM subscriptionplans WHERE id IN (?)`,
-          [planIds]
-        );
-        const planPriceMap = new Map(plans.map((p: any) => [p.id, parseFloat(p.price || 0)]));
-        
-        for (const org of orgsWithPlans) {
-          const planId = org.subscriptionConfig?.planId;
-          if (planId && planPriceMap.has(planId)) {
-            totalRevenue += (planPriceMap.get(planId) as number) || 0;
-          }
-        }
+    for (const org of orgsWithPlans) {
+      let config = org.subscriptionConfig as any;
+      if (typeof config === 'string') {
+        try {
+          config = JSON.parse(config);
+        } catch (e) {}
+      }
+      if (config && config.price !== undefined) {
+        totalRevenue += parseFloat(config.price) || 0;
       }
     }
 

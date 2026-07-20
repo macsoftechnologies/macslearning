@@ -121,13 +121,34 @@ export class OrganizationsService {
       const twentyDaysFromNow = new Date();
       twentyDaysFromNow.setDate(twentyDaysFromNow.getDate() + 20);
       queryBuilder.andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow });
+      queryBuilder.andWhere('org.status != :status', { status: 'INACTIVE' });
     } else if (queryDto.filter === 'pending') {
       queryBuilder.andWhere('org.status = :status', { status: 'INACTIVE' });
+    } else {
+      // By default, do not show PENDING (INACTIVE) organizations
+      queryBuilder.andWhere('org.status != :status', { status: 'INACTIVE' });
     }
 
     const [data, totalItems] = await queryBuilder.getManyAndCount();
 
     return createPaginatedResponse(data, totalItems, page, limit);
+  }
+
+  async getCounts() {
+    const twentyDaysFromNow = new Date();
+    twentyDaysFromNow.setDate(twentyDaysFromNow.getDate() + 20);
+
+    const pendingCount = await this.orgRepository.count({
+      where: { status: 'INACTIVE', isDeleted: false }
+    });
+
+    const expiringCount = await this.orgRepository.createQueryBuilder('org')
+      .where('org.isDeleted = false')
+      .andWhere('org.status != :status', { status: 'INACTIVE' })
+      .andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow })
+      .getCount();
+
+    return { pendingCount, expiringCount };
   }
 
   async getOrganizationById(id: string) {
@@ -161,6 +182,13 @@ export class OrganizationsService {
     const org = await this.orgRepository.findOne({ where: { id: orgId } });
     if (!org) throw new NotFoundException('Organization not found');
     return org;
+  }
+
+  async deleteOrganization(id: string) {
+    const org = await this.orgRepository.findOne({ where: { id, isDeleted: false } });
+    if (!org) throw new NotFoundException('Organization not found');
+    await this.orgRepository.update(id, { isDeleted: true });
+    return { success: true };
   }
 
   async extendSubscription(orgId: string, data: { planId?: string, paymentReferenceId?: string }) {

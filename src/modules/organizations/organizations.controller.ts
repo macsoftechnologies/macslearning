@@ -47,6 +47,15 @@ export class OrganizationsController {
     return this.organizationsService.getOrganizations(query);
   }
 
+  @Get('counts')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
+  @ApiOperation({ summary: 'Get counts for pending and expiring organizations' })
+  async getCounts() {
+    return this.organizationsService.getCounts();
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
@@ -109,6 +118,22 @@ export class OrganizationsController {
       metadata: { name: org.name },
     });
     return org;
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
+  async deleteOrganization(@Request() req: any, @Param('id') orgId: string) {
+    const result = await this.organizationsService.deleteOrganization(orgId);
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: orgId,
+      action: 'Organization Deleted/Rejected',
+      targetId: orgId,
+      metadata: {},
+    });
+    return result;
   }
 
   @Post(':id/extend-subscription')
