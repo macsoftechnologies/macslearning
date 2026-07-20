@@ -120,15 +120,22 @@ export class ResultsService {
       ])
       .getRawMany();
 
-    return results.map((r) => ({
-      ...r,
-      studentId: {
-        _id: r.student_id,
-        id: r.student_id,
-        fullName: r.student_fullName,
-        email: r.student_email,
-      },
-      examId: { _id: r.exam_id, id: r.exam_id, title: r.exam_title },
-    }));
+    return results.map((r) => {
+      const isPassedRaw = r.isPassed ?? r.result_isPassed ?? r.result_ispassed;
+      const isPublishedRaw = r.isPublished ?? r.result_isPublished ?? r.result_ispublished;
+      
+      return {
+        ...r,
+        isPassed: isPassedRaw === true || isPassedRaw === 1 || isPassedRaw === '1',
+        isPublished: isPublishedRaw === true || isPublishedRaw === 1 || isPublishedRaw === '1',
+        studentId: {
+          _id: r.student_id,
+          id: r.student_id,
+          fullName: r.student_fullName,
+          email: r.student_email,
+        },
+        examId: { _id: r.exam_id, id: r.exam_id, title: r.exam_title },
+      };
+    });
   }
 }
