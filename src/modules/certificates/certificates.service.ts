@@ -356,6 +356,42 @@ export class CertificatesService {
     }));
   }
 
+  async getCourseCertificates(organizationId: string, courseId: string) {
+    const certificates = await this.certificateRepository
+      .createQueryBuilder('cert')
+      .leftJoin(User, 'student', 'student.id = cert.studentId')
+      .leftJoin(Course, 'course', 'course.id = cert.courseId')
+      .where('cert.organizationId = :organizationId', { organizationId })
+      .andWhere('cert.courseId = :courseId', { courseId })
+      .select([
+        'cert.*',
+        'student.id as student_id',
+        'student.fullName as student_fullName',
+        'student.email as student_email',
+        'course.id as course_id',
+        'course.title as course_title',
+      ])
+      .getRawMany();
+
+    return certificates.map((c) => ({
+      _id: c.id,
+      id: c.id,
+      organizationId: c.organizationId,
+      studentId: {
+        _id: c.student_id,
+        id: c.student_id,
+        fullName: c.student_fullName,
+        email: c.student_email,
+      },
+      courseId: { _id: c.course_id, id: c.course_id, title: c.course_title },
+      certificateNumber: c.certificateNumber,
+      certificateUrl: c.certificateUrl,
+      issuedAt: c.issuedAt,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    }));
+  }
+
   async getCertificateById(
     certificateId: string,
     organizationId?: string,

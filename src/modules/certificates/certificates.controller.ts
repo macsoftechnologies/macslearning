@@ -112,6 +112,18 @@ export class CertificatesController {
     );
   }
 
+  @Get('courses/:courseId')
+  @Roles('ORG_USER', 'FACULTY')
+  async getCourseCertificates(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.certificatesService.getCourseCertificates(
+      req.user.organizationId,
+      courseId,
+    );
+  }
+
   @Get('my-certificates')
   async getMyCertificates(@Request() req: any) {
     return this.certificatesService.getMyCertificates(
