@@ -14,7 +14,7 @@ export class UsersService {
   ) {}
 
   async createUser(organizationId: string, userData: any) {
-    const { email, password, fullName, userType, mobile } = userData;
+    const { email, password, fullName, userType, mobile, modulePermissions } = userData;
 
     const existingUser = await this.userRepository.findOne({
       where: { email, organizationId },
@@ -37,6 +37,9 @@ export class UsersService {
       status: 'ACTIVE',
       organizationId,
       mobile: normalizedMobile,
+      modulePermissions: Array.isArray(modulePermissions) && modulePermissions.length > 0
+        ? modulePermissions
+        : undefined,
     });
 
     await this.userRepository.save(user);
