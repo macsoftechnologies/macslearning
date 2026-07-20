@@ -293,6 +293,9 @@ export class OrganizationsService {
       adminPassword: registrationData.password,
       adminFullName: registrationData.fullName,
       adminMobile: registrationData.mobile,
+      // Map admin contact details as default organization contact info
+      contactEmail: registrationData.email,
+      contactPhone: registrationData.mobile,
     };
     return this.createOrganization(orgData);
   }
