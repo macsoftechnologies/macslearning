@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useStaticAssets(join(process.cwd(), 'public', 'uploads'), {
     prefix: '/uploads',
   });
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(process.env.API_PREFIX || 'api/v1');
 
   app.useGlobalPipes(
     new ValidationPipe({
