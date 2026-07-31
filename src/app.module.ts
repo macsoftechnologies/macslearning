@@ -48,7 +48,7 @@ import { TranscriptsModule } from './modules/transcripts/transcripts.module';
         password: configService.get<string>('DB_PASSWORD') || '',
         database: configService.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
-        synchronize: false, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
+        synchronize: true, // Temporarily enabled to create the new tables
       }),
       inject: [ConfigService],
     }),

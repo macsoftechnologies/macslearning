@@ -17,6 +17,9 @@ export class Semester {
   @Column({ type: 'varchar' })
   term: string; // e.g. "First", "Second"
 
+  @Column({ type: 'varchar', nullable: true })
+  programId: string; // relation to program
+
   @Column({ type: 'date', nullable: true })
   startDate: Date;
 
