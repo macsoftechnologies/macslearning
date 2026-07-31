@@ -27,12 +27,9 @@ import { SubscriptionPlansModule } from './modules/subscription-plans/subscripti
 import { RegionsModule } from './modules/regions/regions.module';
 import { FacultyModule } from './modules/faculty/faculty.module';
 import { VimeoModule } from './modules/vimeo/vimeo.module';
-<<<<<<< HEAD
 import { ProgramsModule } from './modules/programs/programs.module';
 import { SemestersModule } from './modules/semesters/semesters.module';
 import { ManualGradesModule } from './modules/manual-grades/manual-grades.module';
-=======
->>>>>>> de2e6a8d3bf1245059e9b7102e13239482f7812c
 import { TranscriptsModule } from './modules/transcripts/transcripts.module';
 
 @Module({
@@ -84,12 +81,9 @@ import { TranscriptsModule } from './modules/transcripts/transcripts.module';
     RegionsModule,
     FacultyModule,
     VimeoModule,
-<<<<<<< HEAD
     ProgramsModule,
     SemestersModule,
     ManualGradesModule,
-=======
->>>>>>> de2e6a8d3bf1245059e9b7102e13239482f7812c
     TranscriptsModule,
   ],
   controllers: [AppController],
