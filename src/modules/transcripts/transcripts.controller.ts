@@ -1,7 +1,6 @@
-
 import { Controller, Post, Body, Res, Param } from '@nestjs/common';
 import { TranscriptsService } from './transcripts.service';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 @Controller('transcripts')
 export class TranscriptsController {
