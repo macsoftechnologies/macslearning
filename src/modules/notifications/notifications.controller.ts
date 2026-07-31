@@ -1,0 +1,66 @@
+import {
+  Controller,
+  Get,
+  Patch,
+  Param,
+  UseGuards,
+  Request,
+  Post,
+  Query,
+  Body,
+} from '@nestjs/common';
+import { NotificationsService } from './notifications.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+
+@Controller('notifications')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class NotificationsController {
+  constructor(private readonly notificationsService: NotificationsService) {}
+
+  @Post('broadcast')
+  @Roles('SUPER_ADMIN')
+  async broadcast(@Body() data: { title: string, message: string }) {
+    return this.notificationsService.broadcast(data.title, data.message);
+  }
+
+  @Get()
+  async getUserNotifications(
+    @Request() req: any,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.notificationsService.getUserNotifications(
+      req.user.organizationId,
+      req.user.userId,
+      query,
+    );
+  }
+
+  @Get('unread-count')
+  async getUnreadCount(@Request() req: any) {
+    const count = await this.notificationsService.getUnreadCount(
+      req.user.organizationId,
+      req.user.userId,
+    );
+    return { count };
+  }
+
+  @Patch(':id/read')
+  async markAsRead(@Request() req: any, @Param('id') notificationId: string) {
+    return this.notificationsService.markAsRead(
+      req.user.organizationId,
+      req.user.userId,
+      notificationId,
+    );
+  }
+
+  @Post('mark-all-read')
+  async markAllAsRead(@Request() req: any) {
+    return this.notificationsService.markAllAsRead(
+      req.user.organizationId,
+      req.user.userId,
+    );
+  }
+}

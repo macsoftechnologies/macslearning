@@ -1,0 +1,91 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+@Entity('payments')
+export class Payment {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'varchar' })
+  organizationId: string;
+
+  @Column({ type: 'varchar' })
+  studentId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  courseId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  semesterId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  programId: string;
+
+  @Column({
+    type: 'enum',
+    nullable: true,
+    default: 'COURSE_PURCHASE',
+    enum: ['COURSE_PURCHASE', 'SEMESTER_FEE'],
+  })
+  paymentType: string;
+
+  @Column({
+    type: 'enum',
+    nullable: true,
+    default: 'COMPLETED',
+    enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'CANCELLED'],
+  })
+  status: string;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  amount: number;
+
+  @Column({ type: 'varchar', nullable: true, default: 'INR' })
+  currency: string;
+
+  @Column({ type: 'varchar', unique: true })
+  dummyPaymentId: string;
+
+  @Column({ type: 'boolean', nullable: true, default: true })
+  isPaid: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  enrollmentId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  invoiceNumber: string;
+
+  @Column({
+    type: 'enum',
+    nullable: true,
+    default: 'PENDING',
+    enum: ['PENDING', 'GENERATED', 'FAILED'],
+  })
+  invoiceGenerationStatus: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  invoicePath: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  invoiceGeneratedAt: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  paidAt: Date;
+
+  @Column({ type: 'varchar', nullable: true })
+  createdBy: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  updatedBy: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}

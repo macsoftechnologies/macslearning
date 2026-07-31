@@ -1,0 +1,351 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../users/entities/user.entity';
+import { Course } from '../courses/entities/course.entity';
+import { Payment } from '../payment/entities/payment.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
+import { LessonProgress } from '../progress/entities/lessonProgress.entity';
+import { AssessmentResult } from '../results/entities/assessmentResult.entity';
+import { Organization } from '../organizations/entities/org.entity';
+
+@Injectable()
+export class ReportsService {
+  constructor(
+    @InjectRepository(User) private userRepository: Repository<User>,
+    @InjectRepository(Course) private courseRepository: Repository<Course>,
+    @InjectRepository(Payment) private paymentRepository: Repository<Payment>,
+    @InjectRepository(Enrollment)
+    private enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(LessonProgress)
+    private progressRepository: Repository<LessonProgress>,
+    @InjectRepository(AssessmentResult)
+    private resultRepository: Repository<AssessmentResult>,
+    @InjectRepository(Organization)
+    private orgRepository: Repository<Organization>,
+  ) {}
+
+  async getOverviewStats(organizationId: string) {
+    const totalStudents = await this.userRepository.count({
+      where: { organizationId, userType: 'STUDENT', status: 'ACTIVE' },
+    });
+    const pendingApprovals = await this.userRepository.count({
+      where: { organizationId, userType: 'STUDENT', status: 'PENDING' },
+    });
+    const totalFaculty = await this.userRepository.count({
+      where: { organizationId, userType: 'FACULTY' },
+    });
+    const activeCourses = await this.courseRepository.count({
+      where: { organizationId, status: 'PUBLISHED', isDeleted: false },
+    });
+    const totalEnrollments = await this.enrollmentRepository.count({
+      where: { organizationId },
+    });
+
+    const paymentAgg = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.organizationId = :organizationId', { organizationId })
+      .andWhere('payment.status = :status', { status: 'COMPLETED' })
+      .select('SUM(payment.amount)', 'totalRevenue')
+      .getRawOne();
+
+    const revenue = parseFloat(paymentAgg?.totalRevenue || '0');
+
+    const enrollmentAgg = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .select('COUNT(*)', 'total')
+      .addSelect("SUM(CASE WHEN enrollment.status = 'COMPLETED' THEN 1 ELSE 0 END)", 'completed')
+      .getRawOne();
+
+    const totalE = parseInt(enrollmentAgg?.total || '0', 10);
+    const compE = parseInt(enrollmentAgg?.completed || '0', 10);
+    const completionRate = totalE > 0 ? Number(((compE / totalE) * 100).toFixed(1)) : 0;
+
+    // Calculate Enrollment Trend (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    const trendRaw = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .andWhere('enrollment.createdAt >= :sixMonthsAgo', { sixMonthsAgo })
+      .select('YEAR(enrollment.createdAt)', 'year')
+      .addSelect('MONTH(enrollment.createdAt)', 'month')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('YEAR(enrollment.createdAt)')
+      .addGroupBy('MONTH(enrollment.createdAt)')
+      .orderBy('year', 'ASC')
+      .addOrderBy('month', 'ASC')
+      .getRawMany();
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Fill missing months with 0
+    const enrollmentTrend = [];
+    const currentDate = new Date(sixMonthsAgo);
+    for (let i = 0; i < 6; i++) {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1; // 1-12
+      const match = trendRaw.find(t => parseInt(t.year) === year && parseInt(t.month) === month);
+      
+      enrollmentTrend.push({
+        label: `${monthNames[month - 1]} ${year.toString().slice(-2)}`,
+        count: match ? parseInt(match.count, 10) : 0
+      });
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    // Top Courses
+    const topCoursesRaw = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoin(Course, 'course', 'course.id = enrollment.courseId')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .select('course.id', 'id')
+      .addSelect('course.title', 'title')
+      .addSelect('COUNT(*)', 'enrollments')
+      .groupBy('course.id')
+      .addGroupBy('course.title')
+      .orderBy('enrollments', 'DESC')
+      .limit(3)
+      .getRawMany();
+
+    const topCourses = topCoursesRaw.map(c => ({
+      id: c.id,
+      title: c.title,
+      enrollments: parseInt(c.enrollments, 10)
+    }));
+
+    return {
+      totalStudents,
+      activeStudents: totalStudents, // Add this for the frontend pie chart
+      pendingApprovals,
+      activeCourses,
+      totalCourses: activeCourses,
+      totalFaculty,
+      totalEnrollments,
+      revenue,
+      completionRate,
+      enrollmentTrend,
+      topCourses,
+    };
+  }
+
+  async getSuperAdminStats() {
+    const totalOrganizations = await this.orgRepository.count({
+      where: { isDeleted: false, status: 'ACTIVE' },
+    });
+    const totalUsers = await this.userRepository.count({
+      where: { isDeleted: false, status: 'ACTIVE' },
+    });
+    const totalStudents = await this.userRepository.count({
+      where: { userType: 'STUDENT', isDeleted: false, status: 'ACTIVE' },
+    });
+    const totalFaculty = await this.userRepository.count({
+      where: { userType: 'FACULTY', isDeleted: false, status: 'ACTIVE' },
+    });
+    const totalCourses = await this.courseRepository.count({
+      where: { isDeleted: false, status: 'PUBLISHED' },
+    });
+
+    // Calculate revenue from active organizations that have a paid plan
+    const orgsWithPlans = await this.orgRepository.createQueryBuilder('org')
+      .where('org.status = :status', { status: 'ACTIVE' })
+      .andWhere('org.isDeleted = false')
+      .getMany();
+
+    let totalRevenue = 0;
+    for (const org of orgsWithPlans) {
+      let config = org.subscriptionConfig as any;
+      if (typeof config === 'string') {
+        try {
+          config = JSON.parse(config);
+        } catch (e) {}
+      }
+      if (config && config.price !== undefined) {
+        totalRevenue += parseFloat(config.price) || 0;
+      }
+    }
+
+    return {
+      totalOrganizations,
+      totalUsers,
+      totalStudents,
+      totalFaculty,
+      totalCourses,
+      totalRevenue,
+    };
+  }
+
+  async getCoursePerformance(organizationId: string) {
+    const courses = await this.courseRepository.find({
+      where: { organizationId, isDeleted: false },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        categoryId: true,
+        createdAt: true,
+      },
+    });
+    const courseIds = courses.map((course) => course.id);
+
+    if (!courseIds.length) {
+      return { totalCourses: 0, courses: [] };
+    }
+
+    const enrollmentStats = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
+      .select('enrollment.courseId', 'courseId')
+      .addSelect('COUNT(*)', 'totalEnrollments')
+      .addSelect(
+        "SUM(CASE WHEN enrollment.status = 'ACTIVE' THEN 1 ELSE 0 END)",
+        'activeEnrollments',
+      )
+      .addSelect(
+        "SUM(CASE WHEN enrollment.status = 'COMPLETED' THEN 1 ELSE 0 END)",
+        'completedEnrollments',
+      )
+      .groupBy('enrollment.courseId')
+      .getRawMany();
+
+    const progressStats = await this.progressRepository
+      .createQueryBuilder('progress')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.courseId IN (:...courseIds)', { courseIds })
+      .select('progress.courseId', 'courseId')
+      .addSelect(
+        'AVG(CASE WHEN progress.isCompleted = true THEN 1 ELSE 0 END)',
+        'averageCompletion',
+      )
+      .groupBy('progress.courseId')
+      .getRawMany();
+
+    const resultStats = await this.resultRepository
+      .createQueryBuilder('result')
+      .where('result.organizationId = :organizationId', { organizationId })
+      .andWhere('result.courseId IN (:...courseIds)', { courseIds })
+      .select('result.courseId', 'courseId')
+      .addSelect('COUNT(*)', 'totalResults')
+      .addSelect(
+        'SUM(CASE WHEN result.isPassed = true THEN 1 ELSE 0 END)',
+        'passedCount',
+      )
+      .addSelect('AVG(result.percentage)', 'averageScore')
+      .groupBy('result.courseId')
+      .getRawMany();
+
+    const enrollmentByCourse = new Map(
+      enrollmentStats.map((stat) => [stat.courseId, stat]),
+    );
+    const progressByCourse = new Map(
+      progressStats.map((stat) => [stat.courseId, stat]),
+    );
+    const resultByCourse = new Map(
+      resultStats.map((stat) => [stat.courseId, stat]),
+    );
+
+    const coursePerformance = courses.map((course) => {
+      const courseId = course.id;
+      const enrollment = enrollmentByCourse.get(courseId) || {
+        totalEnrollments: 0,
+        activeEnrollments: 0,
+        completedEnrollments: 0,
+      };
+      const progress = progressByCourse.get(courseId) || {
+        averageCompletion: 0,
+      };
+      const result = resultByCourse.get(courseId) || {
+        totalResults: 0,
+        passedCount: 0,
+        averageScore: 0,
+      };
+
+      return {
+        courseId,
+        title: course.title,
+        status: course.status,
+        categoryId: course.categoryId,
+        createdAt: course.createdAt,
+        enrolledCount: parseInt(enrollment.totalEnrollments || '0', 10),
+        completionRate: Number(
+          (parseFloat(progress.averageCompletion || '0') * 100).toFixed(2),
+        ),
+        avgScore: Number(parseFloat(result.averageScore || '0').toFixed(2)),
+        totalEnrollments: parseInt(enrollment.totalEnrollments || '0', 10),
+        activeEnrollments: parseInt(enrollment.activeEnrollments || '0', 10),
+        completedEnrollments: parseInt(
+          enrollment.completedEnrollments || '0',
+          10,
+        ),
+        averageProgress: Number(
+          (parseFloat(progress.averageCompletion || '0') * 100).toFixed(2),
+        ),
+        averageScore: Number(parseFloat(result.averageScore || '0').toFixed(2)),
+        passRate:
+          parseInt(result.totalResults || '0', 10) > 0
+            ? Number(
+                (
+                  (parseInt(result.passedCount || '0', 10) /
+                    parseInt(result.totalResults || '0', 10)) *
+                  100
+                ).toFixed(2),
+              )
+            : 0,
+      };
+    });
+
+    return {
+      totalCourses: courses.length,
+      courses: coursePerformance,
+    };
+  }
+
+  async getStudentActivity(organizationId: string) {
+    const students = await this.userRepository.find({
+      where: { organizationId, userType: 'STUDENT', isDeleted: false },
+      select: { id: true, fullName: true, email: true, lastLogin: true },
+    });
+
+    if (students.length === 0) return [];
+    const studentIds = students.map((s) => s.id);
+
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.organizationId = :organizationId', { organizationId })
+      .andWhere('enrollment.studentId IN (:...studentIds)', { studentIds })
+      .select('enrollment.studentId', 'studentId')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('enrollment.studentId')
+      .getRawMany();
+    const enrollmentsMap = new Map(
+      enrollments.map((e) => [e.studentId, parseInt(e.count, 10)]),
+    );
+
+    const progresses = await this.progressRepository
+      .createQueryBuilder('progress')
+      .where('progress.organizationId = :organizationId', { organizationId })
+      .andWhere('progress.studentId IN (:...studentIds)', { studentIds })
+      .andWhere('progress.isCompleted = :isCompleted', { isCompleted: true })
+      .select('progress.studentId', 'studentId')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('progress.studentId')
+      .getRawMany();
+    const progressMap = new Map(
+      progresses.map((p) => [p.studentId, parseInt(p.count, 10)]),
+    );
+
+    return students.map((student) => ({
+      studentId: student.id,
+      fullName: student.fullName,
+      email: student.email,
+      coursesEnrolled: enrollmentsMap.get(student.id) || 0,
+      lessonsCompleted: progressMap.get(student.id) || 0,
+      lastActive: student.lastLogin || null,
+    }));
+  }
+}
