@@ -30,6 +30,16 @@ export class SemestersService {
     return this.semestersRepository.save(semester);
   }
 
+  async createBulk(createDataArray: (Partial<Semester> & { name?: string })[]): Promise<Semester[]> {
+    const semesters = createDataArray.map(data => 
+      this.semestersRepository.create({
+        ...data,
+        term: data.name
+      })
+    );
+    return this.semestersRepository.save(semesters);
+  }
+
   async update(id: string, updateData: any): Promise<Semester> {
     const semester = await this.findOne(id);
     if (updateData.status === 'ACTIVE' || updateData.status === 'INACTIVE') {
