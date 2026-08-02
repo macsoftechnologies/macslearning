@@ -1,16 +1,22 @@
-import { Controller, Get, Post, Body, Param, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Request, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ManualGradesService } from './manual-grades.service';
 
 @Controller('manual-grades')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ManualGradesController {
   constructor(private readonly manualGradesService: ManualGradesService) {}
 
   @Get(':batchId/:courseId')
+  @Roles('ORG_USER', 'FACULTY')
   async getGrades(@Request() req: any, @Param('batchId') batchId: string, @Param('courseId') courseId: string) {
     return this.manualGradesService.getGradesForCourse(req.user.organizationId, batchId, courseId);
   }
 
   @Post(':batchId/:courseId')
+  @Roles('ORG_USER', 'FACULTY')
   async saveGrades(@Request() req: any, @Param('batchId') batchId: string, @Param('courseId') courseId: string, @Body('grades') grades: any[]) {
     const gradesData = grades.map(g => ({
       ...g,
