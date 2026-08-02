@@ -26,6 +26,9 @@ export class Enrollment {
   @Column({ type: 'varchar', nullable: true })
   programId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  batchId: string;
+
   @Column({
     type: 'enum',
     nullable: true,

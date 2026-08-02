@@ -23,6 +23,19 @@ export class Program {
   @Column({ type: 'int', default: 30 })
   totalSubjects: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  price: number;
+
+  @Column({ type: 'varchar', default: 'USD' })
+  currency: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['DRAFT', 'PUBLISHED'],
+    default: 'DRAFT',
+  })
+  status: string;
+
   @Column({ default: true })
   isActive: boolean;
 

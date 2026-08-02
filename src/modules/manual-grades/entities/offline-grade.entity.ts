@@ -20,6 +20,9 @@ export class OfflineGrade {
   @Column({ type: 'varchar', nullable: true })
   semesterId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  academicBatchId: string;
+
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   assignmentScore: number; // Max 70
 

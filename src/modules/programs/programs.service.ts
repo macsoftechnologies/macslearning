@@ -29,8 +29,8 @@ export class ProgramsService {
 
   async update(id: string, updateData: any): Promise<Program> {
     const program = await this.findOne(id);
-    if (updateData.status === 'ACTIVE' || updateData.status === 'INACTIVE') {
-      program.isActive = updateData.status === 'ACTIVE';
+    if (updateData.isActive !== undefined) {
+      program.isActive = updateData.isActive;
     }
     const updated = this.programsRepository.merge(program, updateData);
     return this.programsRepository.save(updated);

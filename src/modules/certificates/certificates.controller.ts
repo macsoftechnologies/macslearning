@@ -79,6 +79,20 @@ export class CertificatesController {
     );
   }
 
+  @Post('generate-degree')
+  @Roles('ORG_USER')
+  async generateDegreeCertificate(
+    @Request() req: any,
+    @Body() body: { studentId: string; programId: string; batchId: string },
+  ) {
+    return this.certificatesService.generateDegreeCertificate(
+      req.user.organizationId,
+      body.studentId,
+      body.programId,
+      body.batchId,
+    );
+  }
+
   @Post('request')
   @Roles('STUDENT')
   async requestCertificate(

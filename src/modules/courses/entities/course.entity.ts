@@ -46,6 +46,12 @@ export class Course {
   categoryId: string;
 
   @Column({ type: 'varchar', nullable: true })
+  programId: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  semesterId: string;
+
+  @Column({ type: 'varchar', nullable: true })
   thumbnailUrl: string;
 
   @Column({ type: 'varchar', nullable: true })

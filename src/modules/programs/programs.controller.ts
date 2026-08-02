@@ -7,26 +7,22 @@ export class ProgramsController {
 
   @Get()
   async findAll() {
-    const data = await this.programsService.findAll();
-    return data.map(p => ({ ...p, status: p.isActive ? 'ACTIVE' : 'INACTIVE' }));
+    return this.programsService.findAll();
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    const data = await this.programsService.findOne(id);
-    return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
+    return this.programsService.findOne(id);
   }
 
   @Post()
   async create(@Body() createData: any) {
-    const data = await this.programsService.create(createData);
-    return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
+    return this.programsService.create(createData);
   }
 
   @Put(':id')
   async update(@Param('id') id: string, @Body() updateData: any) {
-    const data = await this.programsService.update(id, updateData);
-    return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
+    return this.programsService.update(id, updateData);
   }
 
   @Delete(':id')

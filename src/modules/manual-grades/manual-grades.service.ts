@@ -16,10 +16,10 @@ export class ManualGradesService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  async getGradesForCourse(organizationId: string, semesterId: string, courseId: string) {
-    // 1. Get enrollments for this semester & course
+  async getGradesForCourse(organizationId: string, batchId: string, semesterId: string, courseId: string) {
+    // 1. Get enrollments for this course AND batch
     const enrollments = await this.enrollmentRepository.find({
-      where: { organizationId, semesterId, courseId, status: 'ACTIVE' },
+      where: { organizationId, batchId, courseId, status: 'ACTIVE' },
     });
 
     if (!enrollments.length) return [];
@@ -35,6 +35,7 @@ export class ManualGradesService {
     // 3. Get existing offline grades
     const existingGrades = await this.offlineGradeRepository.createQueryBuilder('grade')
       .where('grade.studentId IN (:...studentIds)', { studentIds })
+      .andWhere('grade.academicBatchId = :batchId', { batchId })
       .andWhere('grade.semesterId = :semesterId', { semesterId })
       .andWhere('grade.courseId = :courseId', { courseId })
       .getMany();
@@ -64,7 +65,7 @@ export class ManualGradesService {
   async bulkUpsert(gradesData: any[]) {
     const results = [];
     for (const data of gradesData) {
-      const { studentId, courseId, semesterId, assignmentScore, finalExamScore } = data;
+      const { studentId, courseId, semesterId, academicBatchId, assignmentScore, finalExamScore } = data;
       const totalScore = Number(assignmentScore) + Number(finalExamScore);
 
       // Determine grade based on image provided (simplified for now)
@@ -80,7 +81,7 @@ export class ManualGradesService {
       else if (totalScore >= 40) grade = 'C-';
 
       let existing = await this.offlineGradeRepository.findOne({
-        where: { studentId, courseId, semesterId },
+        where: { studentId, courseId, semesterId, academicBatchId },
       });
 
       if (existing) {
@@ -94,6 +95,7 @@ export class ManualGradesService {
           studentId,
           courseId,
           semesterId,
+          academicBatchId,
           assignmentScore,
           finalExamScore,
           totalScore,

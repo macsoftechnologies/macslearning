@@ -8,6 +8,9 @@ export class AcademicBatch {
   @Column({ type: 'varchar' })
   organizationId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  programId: string;
+
   @Column({ type: 'varchar' })
   name: string;
 

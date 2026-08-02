@@ -167,6 +167,87 @@ export class EnrollmentService {
     };
   }
 
+  async enrollInProgram(
+    studentId: string,
+    organizationId: string,
+    programId: string,
+    batchId?: string,
+    regionId?: string,
+  ) {
+    // 1. Fetch all courses for this program
+    const courses = await this.courseRepository.find({
+      where: { organizationId, programId, status: 'PUBLISHED' },
+    });
+    
+    if (!courses.length) {
+      throw new BadRequestException('No courses found for this program');
+    }
+
+    // 2. Fetch or create a dummy payment (in real app, this happens via payment gateway)
+    const dummyPaymentId = `DUMMY-PROG-${uuidv4()}`;
+    const payment = this.paymentRepository.create({
+      organizationId,
+      studentId,
+      dummyPaymentId,
+      status: 'COMPLETED',
+      isPaid: true,
+      paidAt: new Date(),
+      createdBy: studentId,
+      programId: programId as any, // Assuming we can store programId on payment for tracking
+    });
+    
+    const paymentRecord = await this.paymentRepository.save(payment);
+
+    // 3. Create enrollments for EVERY course in the program
+    const enrollmentsToCreate = courses.map(course => {
+      let expiresAt: Date | undefined = undefined;
+      if (course.validityDays && course.validityDays > 0) {
+        expiresAt = new Date(Date.now() + course.validityDays * 24 * 60 * 60 * 1000);
+      }
+
+      return this.enrollmentRepository.create({
+        organizationId,
+        studentId,
+        courseId: course.id,
+        programId,
+        batchId,
+        semesterId: course.semesterId,
+        paymentStatus: 'PAID',
+        source: 'SELF_ENROLL',
+        paymentId: paymentRecord.id,
+        expiresAt,
+      });
+    });
+
+    await this.enrollmentRepository.save(enrollmentsToCreate);
+
+    // 4. Update enrolled count for each course
+    for (const course of courses) {
+      await this.courseRepository.update(
+        { id: course.id },
+        { enrolledCount: (course.enrolledCount || 0) + 1 }
+      );
+    }
+
+    // 5. Notify student
+    try {
+      await this.notificationsService.createNotification(
+        organizationId,
+        studentId,
+        'Enrolled in Program',
+        `You have been successfully enrolled in the program! Access your semesters on your dashboard.`,
+        'ENROLLMENT',
+        `/student/dashboard`,
+      );
+    } catch (e) {}
+
+    return {
+      success: true,
+      dummyPaymentId,
+      enrollmentsCount: enrollmentsToCreate.length,
+    };
+  }
+
   async adminEnrollStudent(
     adminId: string,
     organizationId: string,

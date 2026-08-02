@@ -46,6 +46,9 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   semesterId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  batchId: string;
+
   @Column({ type: 'json', nullable: true })
   modulePermissions: string[];
 

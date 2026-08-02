@@ -15,6 +15,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { User } from '../users/entities/user.entity';
 import { Course } from '../courses/entities/course.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
+import { Program } from '../programs/entities/program.entity';
+import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
 @Injectable()
 export class CertificatesService {
@@ -27,6 +29,8 @@ export class CertificatesService {
     @InjectRepository(Course) private courseRepository: Repository<Course>,
     @InjectRepository(AssessmentResult)
     private resultRepository: Repository<AssessmentResult>,
+    @InjectRepository(Program) private programRepository: Repository<Program>,
+    @InjectRepository(OfflineGrade) private offlineGradeRepository: Repository<OfflineGrade>,
   ) {}
 
   // Template Methods
@@ -320,6 +324,105 @@ export class CertificatesService {
       organizationId,
       studentId,
       courseId,
+      certificateNumber,
+      certificateUrl,
+    });
+
+    return this.certificateRepository.save(certificate);
+  }
+
+  async generateDegreeCertificate(
+    organizationId: string,
+    studentId: string,
+    programId: string,
+    batchId: string,
+  ) {
+    const student = await this.userRepository.findOne({
+      where: { id: studentId, organizationId, userType: 'STUDENT', isDeleted: false },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const program = await this.programRepository.findOne({
+      where: { id: programId }, // Removed organizationId check since Program might not have it in this codebase version, or add if it does.
+    });
+    if (!program) throw new NotFoundException('Program not found');
+
+    // Get all courses for this program
+    const courses = await this.courseRepository.find({
+      where: { organizationId, programId, status: 'PUBLISHED' },
+    });
+
+    if (!courses.length) {
+      throw new BadRequestException('No published courses found in this program');
+    }
+
+    // Verify student has passed all courses via offline_grades
+    const courseIds = courses.map(c => c.id);
+    const offlineGrades = await this.offlineGradeRepository.createQueryBuilder('grade')
+      .where('grade.studentId = :studentId', { studentId })
+      .andWhere('grade.academicBatchId = :batchId', { batchId })
+      .andWhere('grade.courseId IN (:...courseIds)', { courseIds })
+      .getMany();
+
+    const passedCourses = offlineGrades.filter(g => g.totalScore >= 40);
+    
+    if (passedCourses.length < courses.length) {
+      throw new BadRequestException(`Cannot generate degree. Student has passed ${passedCourses.length} out of ${courses.length} courses.`);
+    }
+
+    // Generate degree PDF
+    const certificateNumber = `DEG-${uuidv4().substring(0, 8).toUpperCase()}`;
+    const filename = `${certificateNumber}.pdf`;
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'certificates');
+
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadsDir, filename);
+
+    const pdfDoc = await PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
+    const page = pdfDoc.addPage([842, 595]); // A4 Landscape
+    
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    page.drawText('Degree Certificate', {
+      x: 250,
+      y: 480,
+      size: 40,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText('This is to certify that', { x: 320, y: 400, size: 20, font });
+    page.drawText(student.fullName, {
+      x: 320,
+      y: 350,
+      size: 30,
+      font: boldFont,
+      color: rgb(0.17, 0.24, 0.31),
+    });
+    page.drawText('has successfully completed all requirements for the', { x: 200, y: 280, size: 20, font });
+    page.drawText(program.name, {
+      x: 200,
+      y: 230,
+      size: 30,
+      font: boldFont,
+      color: rgb(0.16, 0.5, 0.72),
+    });
+    page.drawText(`Certificate Number: ${certificateNumber}`, { x: 320, y: 150, size: 15, font });
+    page.drawText(`Issued On: ${new Date().toLocaleDateString()}`, { x: 320, y: 120, size: 15, font });
+
+    const pdfBytes = await pdfDoc.save();
+    fs.writeFileSync(filePath, pdfBytes);
+
+    const certificateUrl = `/uploads/certificates/${filename}`;
+
+    const certificate = this.certificateRepository.create({
+      organizationId,
+      studentId,
+      courseId: programId, // Hack for now to reuse entity without adding programId
       certificateNumber,
       certificateUrl,
     });

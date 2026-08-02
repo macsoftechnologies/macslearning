@@ -35,6 +35,22 @@ export class EnrollmentController {
     );
   }
 
+  @Post('student/programs/:programId/enroll')
+  @Roles('STUDENT')
+  async enrollInProgram(
+    @Request() req: any,
+    @Param('programId') programId: string,
+    @Body() body: any,
+  ) {
+    return this.enrollmentService.enrollInProgram(
+      req.user.userId,
+      req.user.organizationId,
+      programId,
+      body.batchId,
+      req.user.regionId,
+    );
+  }
+
   @Post()
   @Roles('ORG_USER')
   async adminEnrollStudent(

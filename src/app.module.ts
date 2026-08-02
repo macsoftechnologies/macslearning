@@ -32,6 +32,7 @@ import { SemestersModule } from './modules/semesters/semesters.module';
 import { ManualGradesModule } from './modules/manual-grades/manual-grades.module';
 import { TranscriptsModule } from './modules/transcripts/transcripts.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
+import { AcademicBatchesModule } from './modules/academic-batches/academic-batches.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
     ManualGradesModule,
     TranscriptsModule,
     TransactionsModule,
+    AcademicBatchesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
