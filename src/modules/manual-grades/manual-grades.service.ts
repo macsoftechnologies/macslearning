@@ -29,7 +29,7 @@ export class ManualGradesService {
     // 2. Get students
     const students = await this.userRepository.createQueryBuilder('user')
       .where('user.id IN (:...studentIds)', { studentIds })
-      .select(['user.id', 'user.firstName', 'user.lastName', 'user.email'])
+      .select(['user.id', 'user.fullName', 'user.email'])
       .getMany();
 
     // 3. Get existing offline grades
@@ -47,8 +47,8 @@ export class ManualGradesService {
       return {
         studentId: enrollment.studentId,
         student: {
-          firstName: student?.firstName || 'Unknown',
-          lastName: student?.lastName || 'Student',
+          firstName: student?.fullName || 'Unknown Student',
+          lastName: '',
           email: student?.email || '',
         },
         assignmentScore: grade?.assignmentScore || 0,
