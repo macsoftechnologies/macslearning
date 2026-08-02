@@ -34,12 +34,12 @@ export class Organization {
 
   @Column({
     type: 'enum',
-    enum: ['ACTIVE', 'SUSPENDED', 'INACTIVE'],
+    enum: ['ACTIVE', 'SUSPENDED', 'INACTIVE', 'REJECTED'],
     default: 'ACTIVE',
   })
   status: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, unique: true })
   slug: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -71,6 +71,9 @@ export class Organization {
 
   @Column({ default: false })
   isDeleted: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  rejectionReason: string;
 
   @CreateDateColumn()
   createdAt: Date;

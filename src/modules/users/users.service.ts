@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -304,7 +304,27 @@ export class UsersService {
     return { ...safeUser, organizationName, organizationSlug };
   }
 
-  async updateUser(userId: string, updateData: any) {
+  async updateUser(userId: string, updateData: any, reqUser?: { userType: string; organizationId?: string; isSuperAdminEndpoint?: boolean }) {
+    const userToUpdate = await this.userRepository.findOne({ where: { id: userId } });
+    if (!userToUpdate) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Security Check: IDOR prevention for ORG_USER
+    if (reqUser?.userType === 'ORG_USER') {
+      if (userToUpdate.organizationId !== reqUser.organizationId) {
+        throw new UnauthorizedException('You do not have permission to update this user');
+      }
+      if (userToUpdate.userType === 'SUPER_ADMIN') {
+        throw new UnauthorizedException('Organization users cannot update Super Admins');
+      }
+    }
+
+    // Security Check: Prevent modifying SUPER_ADMIN from regular user endpoints
+    if (userToUpdate.userType === 'SUPER_ADMIN' && !reqUser?.isSuperAdminEndpoint) {
+      throw new UnauthorizedException('Cannot update Super Admin via this endpoint');
+    }
+
     await this.userRepository.update(userId, updateData);
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -343,5 +363,22 @@ export class UsersService {
       select: { id: true },
     });
     return users.map((u) => u.id);
+  }
+
+  async getSuperAdminIds(): Promise<string[]> {
+    const admins = await this.userRepository.find({
+      where: { userType: 'SUPER_ADMIN', status: 'ACTIVE', isDeleted: false },
+      select: { id: true },
+    });
+    return admins.map(a => a.id);
+  }
+
+  async suffixOrgAdminEmail(orgId: string, suffix: string) {
+    const adminUser = await this.userRepository.findOne({ where: { organizationId: orgId, userType: 'ORG_USER' } });
+    if (adminUser) {
+      await this.userRepository.update(adminUser.id, {
+        email: `${adminUser.email}${suffix}`
+      });
+    }
   }
 }

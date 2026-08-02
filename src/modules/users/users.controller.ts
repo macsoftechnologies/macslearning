@@ -47,7 +47,11 @@ export class UsersController {
 
   @Patch('me')
   async updateMe(@Request() req: any, @Body() updateData: UpdateUserDto) {
-    return this.usersService.updateUser(req.user.userId, updateData);
+    return this.usersService.updateUser(req.user.userId, updateData, {
+      userType: req.user.userType,
+      organizationId: req.user.organizationId,
+      isSuperAdminEndpoint: req.user.userType === 'SUPER_ADMIN',
+    });
   }
 
   @Post()
@@ -74,10 +78,11 @@ export class UsersController {
     @Param('id') userId: string,
     @Body() updateData: UpdateUserDto,
   ) {
-    // Basic authorization check could be added here if ORG_USER
-    // is trying to update a user outside their organization.
-    // For now, rely on UI passing valid IDs or add simple check.
-    return this.usersService.updateUser(userId, updateData);
+    return this.usersService.updateUser(userId, updateData, {
+      userType: req.user.userType,
+      organizationId: req.user.organizationId,
+      isSuperAdminEndpoint: false,
+    });
   }
 
   @Post('super-admin-team')
@@ -105,7 +110,11 @@ export class UsersController {
     @Param('id') id: string,
     @Body() updateData: UpdateUserDto,
   ) {
-    const res = await this.usersService.updateUser(id, updateData);
+    const res = await this.usersService.updateUser(id, updateData, {
+      userType: req.user.userType,
+      organizationId: req.user.organizationId,
+      isSuperAdminEndpoint: true,
+    });
     await this.auditService.createLog({
       actorId: req.user.userId,
       action: 'Super Admin Team Member Updated',
@@ -123,7 +132,11 @@ export class UsersController {
     @Param('id') id: string,
     @Body() statusDto: UpdateUserStatusDto,
   ) {
-    const res = await this.usersService.updateUser(id, { status: statusDto.status });
+    const res = await this.usersService.updateUser(id, { status: statusDto.status }, {
+      userType: req.user.userType,
+      organizationId: req.user.organizationId,
+      isSuperAdminEndpoint: true,
+    });
     await this.auditService.createLog({
       actorId: req.user.userId,
       action: `Super Admin Team Member Status Changed: ${statusDto.status}`,

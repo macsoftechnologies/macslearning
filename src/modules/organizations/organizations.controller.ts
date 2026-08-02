@@ -131,11 +131,32 @@ export class OrganizationsController {
     await this.auditService.createLog({
       actorId: req.user.userId,
       organizationId: orgId,
-      action: 'Organization Deleted/Rejected',
+      action: 'Organization Deleted',
       targetId: orgId,
       metadata: {},
     });
     return result;
+  }
+
+  @Post(':id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('SUPER_ADMIN')
+  @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
+  @ApiOperation({ summary: 'Reject a pending organization application' })
+  async rejectOrganization(
+    @Request() req: any,
+    @Param('id') orgId: string,
+    @Body() data: { reason: string }
+  ) {
+    const org = await this.organizationsService.rejectOrganization(orgId, data.reason);
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: orgId,
+      action: 'Organization Rejected',
+      targetId: org.id,
+      metadata: { name: org.name, reason: data.reason },
+    });
+    return org;
   }
 
   @Get(':id/storage')

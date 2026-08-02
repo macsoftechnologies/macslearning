@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 import { UsersModule } from '../users/users.module';
 import { AuditModule } from '../audit/audit.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,6 +20,8 @@ import { VimeoModule } from '../vimeo/vimeo.module';
     AuditModule,
     UsersModule,
     VimeoModule,
+    NotificationsModule,
+    TransactionsModule,
   ],
   controllers: [OrganizationsController, PublicOrganizationsController],
   providers: [OrganizationsService],

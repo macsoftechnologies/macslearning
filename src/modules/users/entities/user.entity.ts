@@ -4,9 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 
 @Entity('users')
+@Unique(['email', 'organizationId'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -20,7 +22,7 @@ export class User {
   @Column({ type: 'varchar' })
   fullName: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
   email: string;
 
   @Column({ type: 'varchar', nullable: true })

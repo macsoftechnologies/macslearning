@@ -31,6 +31,7 @@ import { ProgramsModule } from './modules/programs/programs.module';
 import { SemestersModule } from './modules/semesters/semesters.module';
 import { ManualGradesModule } from './modules/manual-grades/manual-grades.module';
 import { TranscriptsModule } from './modules/transcripts/transcripts.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
 
 @Module({
   imports: [
@@ -49,6 +50,9 @@ import { TranscriptsModule } from './modules/transcripts/transcripts.module';
         database: configService.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
         synchronize: false, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
+        extra: {
+          connectionLimit: 50, // Increased from default 10 to handle higher concurrency
+        },
       }),
       inject: [ConfigService],
     }),
@@ -85,6 +89,7 @@ import { TranscriptsModule } from './modules/transcripts/transcripts.module';
     SemestersModule,
     ManualGradesModule,
     TranscriptsModule,
+    TransactionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

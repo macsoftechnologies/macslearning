@@ -7,6 +7,8 @@ import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { SubscriptionPlan } from '../subscription-plans/entities/subscription-plan.entity';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { TransactionsService } from '../transactions/transactions.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -18,6 +20,8 @@ export class OrganizationsService {
     @InjectRepository(SubscriptionPlan)
     private subscriptionPlanRepository: Repository<SubscriptionPlan>,
     private usersService: UsersService,
+    private notificationsService: NotificationsService,
+    private transactionsService: TransactionsService,
   ) {}
 
   async createOrganization(orgData: any) {
@@ -99,6 +103,18 @@ export class OrganizationsService {
       }
     }
 
+    if (resolvedSubscriptionConfig) {
+      await this.transactionsService.createTransaction({
+        organizationId: savedOrg.id,
+        planId: resolvedSubscriptionConfig.planId,
+        planName: resolvedSubscriptionConfig.planType,
+        amount: resolvedSubscriptionConfig.price || 0,
+        currency: resolvedSubscriptionConfig.currency || 'USD',
+        referenceId: resolvedSubscriptionConfig.paymentReferenceId || undefined,
+        status: resolvedSubscriptionConfig.paymentStatus === 'PAID' ? 'SUCCESS' : 'PENDING',
+      });
+    }
+
     return savedOrg;
   }
 
@@ -121,12 +137,14 @@ export class OrganizationsService {
       const twentyDaysFromNow = new Date();
       twentyDaysFromNow.setDate(twentyDaysFromNow.getDate() + 20);
       queryBuilder.andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow });
-      queryBuilder.andWhere('org.status != :status', { status: 'INACTIVE' });
+      queryBuilder.andWhere('org.status NOT IN (:...statuses)', { statuses: ['INACTIVE', 'REJECTED'] });
     } else if (queryDto.filter === 'pending') {
       queryBuilder.andWhere('org.status = :status', { status: 'INACTIVE' });
+    } else if (queryDto.filter === 'rejected') {
+      queryBuilder.andWhere('org.status = :status', { status: 'REJECTED' });
     } else {
-      // By default, do not show PENDING (INACTIVE) organizations
-      queryBuilder.andWhere('org.status != :status', { status: 'INACTIVE' });
+      // By default, do not show PENDING (INACTIVE) or REJECTED organizations
+      queryBuilder.andWhere('org.status NOT IN (:...statuses)', { statuses: ['INACTIVE', 'REJECTED'] });
     }
 
     const [data, totalItems] = await queryBuilder.getManyAndCount();
@@ -144,7 +162,7 @@ export class OrganizationsService {
 
     const expiringCount = await this.orgRepository.createQueryBuilder('org')
       .where('org.isDeleted = false')
-      .andWhere('org.status != :status', { status: 'INACTIVE' })
+      .andWhere('org.status NOT IN (:...statuses)', { statuses: ['INACTIVE', 'REJECTED'] })
       .andWhere('org.subscriptionExpiresAt <= :twentyDaysFromNow', { twentyDaysFromNow })
       .getCount();
 
@@ -189,6 +207,28 @@ export class OrganizationsService {
     if (!org) throw new NotFoundException('Organization not found');
     await this.orgRepository.update(id, { isDeleted: true });
     return { success: true };
+  }
+
+  async rejectOrganization(id: string, reason: string) {
+    const org = await this.orgRepository.findOne({ where: { id, isDeleted: false } });
+    if (!org) throw new NotFoundException('Organization not found');
+    
+    // Append a timestamp suffix so the original name, code, slug, domain, loginUrl can be re-registered
+    const suffix = `_rejected_${Date.now()}`;
+    await this.orgRepository.update(id, { 
+      status: 'REJECTED', 
+      rejectionReason: reason,
+      name: `${org.name}${suffix}`,
+      code: `${org.code}${suffix}`,
+      slug: org.slug ? `${org.slug}${suffix}` : undefined,
+      domain: org.domain ? `${org.domain}${suffix}` : undefined,
+      loginUrl: org.loginUrl ? `${org.loginUrl}${suffix}` : undefined
+    });
+    
+    // Suffix the associated admin user's email so they can register again
+    await this.usersService.suffixOrgAdminEmail(id, suffix);
+
+    return this.getOrganizationById(id);
   }
 
   async extendSubscription(orgId: string, data: { planId?: string, paymentReferenceId?: string, paymentStatus?: string, lastPaymentDate?: string }) {
@@ -240,6 +280,17 @@ export class OrganizationsService {
     await this.orgRepository.update(orgId, {
       subscriptionConfig: updatedConfig,
       subscriptionExpiresAt: newExpiresAt,
+    });
+
+    // Create a transaction record unconditionally
+    await this.transactionsService.createTransaction({
+      organizationId: orgId,
+      planId: plan.id,
+      planName: plan.name || plan.code,
+      amount: finalPrice,
+      currency: finalCurrency,
+      referenceId: data.paymentReferenceId || undefined,
+      status: data.paymentStatus === 'PAID' ? 'SUCCESS' : 'PENDING',
     });
 
     return this.getOrganizationById(orgId);
@@ -297,10 +348,29 @@ export class OrganizationsService {
       adminPassword: registrationData.password,
       adminFullName: registrationData.fullName,
       adminMobile: registrationData.mobile,
-      // Map admin contact details as default organization contact info
-      contactEmail: registrationData.email,
-      contactPhone: registrationData.mobile,
+      // Map admin contact details as default organization contact info if explicit fields are missing
+      contactEmail: registrationData.contactEmail || registrationData.email,
+      contactPhone: registrationData.contactPhone || registrationData.mobile,
+      address: registrationData.address || '',
     };
-    return this.createOrganization(orgData);
+    const org = await this.createOrganization(orgData);
+
+    try {
+      const superAdminIds = await this.usersService.getSuperAdminIds();
+      if (superAdminIds.length > 0) {
+        await this.notificationsService.createNotificationsBulk(
+          'SYSTEM',
+          superAdminIds,
+          'New Organization Registration',
+          `Organization "${org.name}" has registered and is pending approval.`,
+          'SYSTEM',
+          '/super-admin/organizations?filter=pending'
+        );
+      }
+    } catch (e) {
+      console.error('Failed to notify super admins:', e);
+    }
+
+    return org;
   }
 }
