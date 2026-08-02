@@ -2,13 +2,64 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OfflineGrade } from './entities/offline-grade.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class ManualGradesService {
   constructor(
     @InjectRepository(OfflineGrade)
     private readonly offlineGradeRepository: Repository<OfflineGrade>,
+    @InjectRepository(Enrollment)
+    private readonly enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
+
+  async getGradesForCourse(organizationId: string, semesterId: string, courseId: string) {
+    // 1. Get enrollments for this semester & course
+    const enrollments = await this.enrollmentRepository.find({
+      where: { organizationId, semesterId, courseId, status: 'ACTIVE' },
+    });
+
+    if (!enrollments.length) return [];
+
+    const studentIds = enrollments.map(e => e.studentId);
+
+    // 2. Get students
+    const students = await this.userRepository.createQueryBuilder('user')
+      .where('user.id IN (:...studentIds)', { studentIds })
+      .select(['user.id', 'user.firstName', 'user.lastName', 'user.email'])
+      .getMany();
+
+    // 3. Get existing offline grades
+    const existingGrades = await this.offlineGradeRepository.createQueryBuilder('grade')
+      .where('grade.studentId IN (:...studentIds)', { studentIds })
+      .andWhere('grade.semesterId = :semesterId', { semesterId })
+      .andWhere('grade.courseId = :courseId', { courseId })
+      .getMany();
+
+    // 4. Combine
+    const results = enrollments.map(enrollment => {
+      const student = students.find(s => s.id === enrollment.studentId);
+      const grade = existingGrades.find(g => g.studentId === enrollment.studentId);
+
+      return {
+        studentId: enrollment.studentId,
+        student: {
+          firstName: student?.firstName || 'Unknown',
+          lastName: student?.lastName || 'Student',
+          email: student?.email || '',
+        },
+        assignmentScore: grade?.assignmentScore || 0,
+        finalExamScore: grade?.finalExamScore || 0,
+        totalScore: grade?.totalScore || 0,
+        grade: grade?.grade || 'F',
+      };
+    });
+
+    return results;
+  }
 
   async bulkUpsert(gradesData: any[]) {
     const results = [];
