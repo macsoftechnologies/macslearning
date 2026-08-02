@@ -15,6 +15,7 @@ import { Lesson } from '../content/entities/lesson.entity';
 import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
+import { Program } from '../programs/entities/program.entity';
 
 @Injectable()
 export class EnrollmentService {
@@ -26,6 +27,7 @@ export class EnrollmentService {
     @InjectRepository(Lesson) private lessonRepository: Repository<Lesson>,
     @InjectRepository(LessonProgress)
     private lessonProgressRepository: Repository<LessonProgress>,
+    @InjectRepository(Program) private programRepository: Repository<Program>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -174,6 +176,14 @@ export class EnrollmentService {
     batchId?: string,
     regionId?: string,
   ) {
+    const program = await this.programRepository.findOne({
+      where: { id: programId } // Add organizationId check if program has it in the future
+    });
+    
+    if (!program) {
+      throw new NotFoundException('Program not found');
+    }
+
     // 1. Fetch all courses for this program
     const courses = await this.courseRepository.find({
       where: { organizationId, programId, status: 'PUBLISHED' },
@@ -183,20 +193,52 @@ export class EnrollmentService {
       throw new BadRequestException('No courses found for this program');
     }
 
+    let isPaid = false;
+    let amount = 0;
+
+    const pricing = program.pricing;
+    if (pricing) {
+      isPaid = pricing.isPaid || false;
+      amount = parseFloat(pricing.amount) || 0;
+    }
+
+    if (isPaid && regionId && program.regionalPrices) {
+      let parsedPrices = program.regionalPrices;
+      if (typeof parsedPrices === 'string') {
+        try { parsedPrices = JSON.parse(parsedPrices); } catch (e) {}
+      }
+      
+      if (Array.isArray(parsedPrices)) {
+        const rp = parsedPrices.find(
+          (p: any) =>
+            p.regionId === regionId ||
+            (p.regionId && p.regionId._id === regionId) ||
+            (p.regionId && p.regionId.id === regionId),
+        );
+        if (rp) {
+          amount = parseFloat(rp.price) || 0;
+        }
+      }
+    }
+
     // 2. Fetch or create a dummy payment (in real app, this happens via payment gateway)
-    const dummyPaymentId = `DUMMY-PROG-${uuidv4()}`;
-    const payment = this.paymentRepository.create({
-      organizationId,
-      studentId,
-      dummyPaymentId,
-      status: 'COMPLETED',
-      isPaid: true,
-      paidAt: new Date(),
-      createdBy: studentId,
-      programId: programId as any, // Assuming we can store programId on payment for tracking
-    });
+    let paymentRecord = null;
     
-    const paymentRecord = await this.paymentRepository.save(payment);
+    if (isPaid) {
+      const dummyPaymentId = `DUMMY-PROG-${uuidv4()}`;
+      const payment = this.paymentRepository.create({
+        organizationId,
+        studentId,
+        dummyPaymentId,
+        amount,
+        status: 'COMPLETED',
+        isPaid: true,
+        paidAt: new Date(),
+        createdBy: studentId,
+        programId: programId as any, // Assuming we can store programId on payment for tracking
+      });
+      paymentRecord = await this.paymentRepository.save(payment);
+    }
 
     // 3. Create enrollments for EVERY course in the program
     const enrollmentsToCreate = courses.map(course => {
@@ -212,9 +254,9 @@ export class EnrollmentService {
         programId,
         batchId,
         semesterId: course.semesterId,
-        paymentStatus: 'PAID',
+        paymentStatus: isPaid ? 'PAID' : 'NOT_APPLICABLE',
         source: 'SELF_ENROLL',
-        paymentId: paymentRecord.id,
+        paymentId: paymentRecord ? paymentRecord.id : undefined,
         expiresAt,
       });
     });
@@ -243,7 +285,8 @@ export class EnrollmentService {
 
     return {
       success: true,
-      dummyPaymentId,
+      dummyPaymentId: paymentRecord ? paymentRecord.dummyPaymentId : null,
+      amount: paymentRecord ? paymentRecord.amount : null,
       enrollmentsCount: enrollmentsToCreate.length,
     };
   }

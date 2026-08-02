@@ -23,11 +23,14 @@ export class Program {
   @Column({ type: 'int', default: 30 })
   totalSubjects: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  price: number;
+  @Column({ type: 'json', nullable: true })
+  pricing: any;
 
-  @Column({ type: 'varchar', default: 'USD' })
-  currency: string;
+  @Column({ type: 'json', nullable: true })
+  regionalPrices: any[];
+
+  @Column({ type: 'varchar', nullable: true })
+  coursePlanId: string;
 
   @Column({
     type: 'enum',
