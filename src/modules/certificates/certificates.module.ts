@@ -8,6 +8,9 @@ import { User } from '../users/entities/user.entity';
 import { Course } from '../courses/entities/course.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
 
+import { Program } from '../programs/entities/program.entity';
+import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -16,6 +19,8 @@ import { AssessmentResult } from '../results/entities/assessmentResult.entity';
       User,
       Course,
       AssessmentResult,
+      Program,
+      OfflineGrade
     ]),
   ],
   controllers: [CertificatesController],
