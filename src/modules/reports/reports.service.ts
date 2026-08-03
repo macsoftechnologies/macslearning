@@ -186,7 +186,6 @@ export class ReportsService {
         id: true,
         title: true,
         status: true,
-        categoryId: true,
         createdAt: true,
       },
     });
@@ -269,7 +268,6 @@ export class ReportsService {
         courseId,
         title: course.title,
         status: course.status,
-        categoryId: course.categoryId,
         createdAt: course.createdAt,
         enrolledCount: parseInt(enrollment.totalEnrollments || '0', 10),
         completionRate: Number(

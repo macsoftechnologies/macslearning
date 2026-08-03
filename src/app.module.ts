@@ -22,7 +22,6 @@ import { ProgressModule } from './modules/progress/progress.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { DiscussionModule } from './modules/discussion/discussion.module';
 import { AuditModule } from './modules/audit/audit.module';
-import { CategoryModule } from './modules/category/category.module';
 import { SubscriptionPlansModule } from './modules/subscription-plans/subscription-plans.module';
 import { RegionsModule } from './modules/regions/regions.module';
 import { FacultyModule } from './modules/faculty/faculty.module';
@@ -81,7 +80,6 @@ import { AcademicBatchesModule } from './modules/academic-batches/academic-batch
     AssignmentsModule,
     DiscussionModule,
     AuditModule,
-    CategoryModule,
     SubscriptionPlansModule,
     RegionsModule,
     FacultyModule,

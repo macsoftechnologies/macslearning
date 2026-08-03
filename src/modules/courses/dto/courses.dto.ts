@@ -42,9 +42,6 @@ export class CreateCourseDto {
   @IsOptional()
   description?: string;
 
-  @IsString()
-  @IsOptional()
-  categoryId?: string;
 
   @IsArray()
   @IsString({ each: true })

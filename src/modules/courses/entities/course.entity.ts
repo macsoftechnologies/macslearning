@@ -42,8 +42,6 @@ export class Course {
   @Column({ type: 'json', nullable: true })
   instructorIds: string[];
 
-  @Column({ type: 'varchar', nullable: true })
-  categoryId: string;
 
   @Column({ type: 'varchar', nullable: true })
   programId: string;

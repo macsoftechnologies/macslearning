@@ -32,6 +32,12 @@ export class Program {
   @Column({ type: 'varchar', nullable: true })
   coursePlanId: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  certificateTemplateId: string;
+
+  @Column({ type: 'enum', enum: ['AUTO', 'MANUAL_APPROVAL'], nullable: true, default: 'AUTO' })
+  certificateIssueMode: string;
+
   @Column({
     type: 'enum',
     enum: ['DRAFT', 'PUBLISHED'],
