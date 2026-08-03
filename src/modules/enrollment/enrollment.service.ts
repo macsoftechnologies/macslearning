@@ -181,7 +181,7 @@ export class EnrollmentService {
     regionId?: string,
   ) {
     const program = await this.programRepository.findOne({
-      where: { id: programId } // Add organizationId check if program has it in the future
+      where: { id: programId, organizationId }
     });
     
     if (!program) {
@@ -599,9 +599,9 @@ export class EnrollmentService {
     const batchIds = [...new Set(mappedEnrollments.map(e => e.batchId).filter(Boolean))];
     const semesterIds = [...new Set(mappedEnrollments.map(e => e.semesterId).filter(Boolean))];
 
-    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
-    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
-    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).andWhere('program.organizationId = :organizationId', { organizationId }).getMany() : [];
+    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).andWhere('batch.organizationId = :organizationId', { organizationId }).getMany() : [];
+    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).andWhere('semester.organizationId = :organizationId', { organizationId }).getMany() : [];
 
     return mappedEnrollments.map((e) => {
       const cId = e.courseId.id || '';

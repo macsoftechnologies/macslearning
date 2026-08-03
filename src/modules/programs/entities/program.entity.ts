@@ -11,7 +11,10 @@ export class Program {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
+  organizationId: string;
+
+  @Column({ type: 'varchar' })
   name: string; // e.g. M.Div., M.A., B.Th.
 
   @Column({ type: 'text', nullable: true })

@@ -11,7 +11,10 @@ export class Semester {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
+  organizationId: string;
+
+  @Column({ type: 'varchar' })
   name: string; // e.g., "First Semester 2026", "Second Semester 2026"
 
   @Column({ type: 'varchar' })

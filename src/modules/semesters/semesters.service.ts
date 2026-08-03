@@ -10,12 +10,14 @@ export class SemestersService {
     private semestersRepository: Repository<Semester>,
   ) {}
 
-  async findAll(): Promise<Semester[]> {
-    return this.semestersRepository.find({ order: { createdAt: 'DESC' } });
+  async findAll(organizationId: string): Promise<Semester[]> {
+    return this.semestersRepository.find({ where: { organizationId }, order: { createdAt: 'DESC' } });
   }
 
-  async findOne(id: string): Promise<Semester> {
-    const semester = await this.semestersRepository.findOne({ where: { id } });
+  async findOne(id: string, organizationId?: string): Promise<Semester> {
+    const where: any = { id };
+    if (organizationId) where.organizationId = organizationId;
+    const semester = await this.semestersRepository.findOne({ where });
     if (!semester) {
       throw new NotFoundException(`Semester with ID ${id} not found`);
     }
@@ -40,8 +42,8 @@ export class SemestersService {
     return this.semestersRepository.save(semesters);
   }
 
-  async update(id: string, updateData: any): Promise<Semester> {
-    const semester = await this.findOne(id);
+  async update(id: string, organizationId: string, updateData: any): Promise<Semester> {
+    const semester = await this.findOne(id, organizationId);
     if (updateData.status === 'ACTIVE' || updateData.status === 'INACTIVE') {
       semester.isActive = updateData.status === 'ACTIVE';
     }
@@ -52,8 +54,8 @@ export class SemestersService {
     return this.semestersRepository.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
-    const semester = await this.findOne(id);
+  async remove(id: string, organizationId: string): Promise<void> {
+    const semester = await this.findOne(id, organizationId);
     await this.semestersRepository.remove(semester);
   }
 }

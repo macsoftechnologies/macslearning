@@ -11,6 +11,9 @@ export class OfflineGrade {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  organizationId: string;
+
   @Column({ type: 'varchar' })
   studentId: string;
 

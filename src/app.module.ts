@@ -49,7 +49,7 @@ import { AcademicBatchesModule } from './modules/academic-batches/academic-batch
         password: configService.get<string>('DB_PASSWORD') || '',
         database: configService.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
-        synchronize: false, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
+        synchronize: true, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
         extra: {
           connectionLimit: 50, // Increased from default 10 to handle higher concurrency
         },

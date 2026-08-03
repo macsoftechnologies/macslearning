@@ -339,6 +339,7 @@ export class FacultyService {
       const videos = await this.lessonRepository
         .createQueryBuilder('lesson')
         .where('lesson.courseId IN (:...courseIds)', { courseIds })
+        .andWhere('lesson.organizationId = :organizationId', { organizationId })
         .andWhere('lesson.type = :type', { type: 'VIDEO' })
         .select('lesson.courseId', 'courseId')
         .addSelect('COUNT(*)', 'count')
@@ -349,6 +350,7 @@ export class FacultyService {
       const exams = await this.examRepository
         .createQueryBuilder('exam')
         .where('exam.courseId IN (:...courseIds)', { courseIds })
+        .andWhere('exam.organizationId = :organizationId', { organizationId })
         .select('exam.courseId', 'courseId')
         .addSelect('COUNT(*)', 'count')
         .groupBy('exam.courseId')
@@ -358,6 +360,7 @@ export class FacultyService {
       const assignments = await this.assignmentRepository
         .createQueryBuilder('assignment')
         .where('assignment.courseId IN (:...courseIds)', { courseIds })
+        .andWhere('assignment.organizationId = :organizationId', { organizationId })
         .select('assignment.courseId', 'courseId')
         .addSelect('COUNT(*)', 'count')
         .groupBy('assignment.courseId')

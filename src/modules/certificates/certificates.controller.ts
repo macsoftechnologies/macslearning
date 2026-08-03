@@ -93,6 +93,20 @@ export class CertificatesController {
     );
   }
 
+  @Post('preview-degree')
+  @Roles('ORG_USER')
+  async previewDegreeCertificate(
+    @Request() req: any,
+    @Body() body: { studentId: string; programId: string },
+  ) {
+    const base64 = await this.certificatesService.previewDegreeCertificate(
+      req.user.organizationId,
+      body.studentId,
+      body.programId,
+    );
+    return { data: { base64Pdf: base64 } };
+  }
+
   @Post('request')
   @Roles('STUDENT')
   async requestCertificate(
@@ -124,6 +138,20 @@ export class CertificatesController {
       body.courseId,
       false,
     );
+  }
+
+  @Post('preview')
+  @Roles('ORG_USER')
+  async previewCertificate(
+    @Request() req: any,
+    @Body() body: GenerateCertificateDto,
+  ) {
+    const base64 = await this.certificatesService.previewCourseCertificate(
+      req.user.organizationId,
+      body.studentId,
+      body.courseId,
+    );
+    return { data: { base64Pdf: base64 } };
   }
 
   @Get('courses/:courseId')

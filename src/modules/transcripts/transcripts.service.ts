@@ -14,14 +14,17 @@ export class TranscriptsService {
     @InjectRepository(User) private userRepository: Repository<User>,
   ) {}
 
-  async generatePdf(studentId: string, conduct: string, awards: string): Promise<Buffer> {
-    const student = await this.userRepository.findOne({ where: { id: studentId } });
+  async generatePdf(organizationId: string, studentId: string, conduct: string, awards: string): Promise<Buffer> {
+    const student = await this.userRepository.findOne({ where: { id: studentId, organizationId, isDeleted: false } });
     if (!student) throw new NotFoundException('Student not found');
 
-    const grades = await this.offlineGradeRepository.find({ where: { studentId } });
+    const grades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
     const courseIds = [...new Set(grades.map(g => g.courseId))];
     const courses = courseIds.length > 0 
-      ? await this.courseRepository.createQueryBuilder('course').where('course.id IN (:...courseIds)', { courseIds }).getMany() 
+      ? await this.courseRepository.createQueryBuilder('course')
+          .where('course.id IN (:...courseIds)', { courseIds })
+          .andWhere('course.organizationId = :organizationId', { organizationId })
+          .getMany() 
       : [];
 
     return new Promise((resolve, reject) => {

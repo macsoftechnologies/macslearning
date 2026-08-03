@@ -1,46 +1,58 @@
-import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Request, UseGuards } from '@nestjs/common';
 import { SemestersService } from './semesters.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('semesters')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class SemestersController {
   constructor(private readonly semestersService: SemestersService) {}
 
   @Get()
-  async findAll() {
-    const data = await this.semestersService.findAll();
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
+  async findAll(@Request() req: any) {
+    const data = await this.semestersService.findAll(req.user.organizationId);
     return data.map(s => ({ ...s, status: s.isActive ? 'ACTIVE' : 'INACTIVE' }));
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const data = await this.semestersService.findOne(id);
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
+  async findOne(@Request() req: any, @Param('id') id: string) {
+    const data = await this.semestersService.findOne(id, req.user.organizationId);
     return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
   }
 
   @Post()
-  async create(@Body() createData: any) {
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async create(@Request() req: any, @Body() createData: any) {
+    createData.organizationId = req.user.organizationId;
     const data = await this.semestersService.create(createData);
     return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
   }
 
   @Post('bulk')
-  async createBulk(@Body() createDataArray: any[]) {
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async createBulk(@Request() req: any, @Body() createDataArray: any[]) {
     if (!Array.isArray(createDataArray)) {
       throw new Error('Payload must be an array of semesters');
     }
-    const data = await this.semestersService.createBulk(createDataArray);
+    const withOrg = createDataArray.map(s => ({ ...s, organizationId: req.user.organizationId }));
+    const data = await this.semestersService.createBulk(withOrg);
     return data.map(s => ({ ...s, status: s.isActive ? 'ACTIVE' : 'INACTIVE' }));
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() updateData: any) {
-    const data = await this.semestersService.update(id, updateData);
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async update(@Request() req: any, @Param('id') id: string, @Body() updateData: any) {
+    const data = await this.semestersService.update(id, req.user.organizationId, updateData);
     return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.semestersService.remove(id);
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async remove(@Request() req: any, @Param('id') id: string) {
+    await this.semestersService.remove(id, req.user.organizationId);
     return { success: true, message: 'Semester deleted successfully' };
   }
 }

@@ -10,8 +10,8 @@ export class ProgramsService {
     private programsRepository: Repository<Program>,
   ) {}
 
-  async findAll(query: any = {}): Promise<Program[]> {
-    const where: any = {};
+  async findAll(organizationId: string, query: any = {}): Promise<Program[]> {
+    const where: any = { organizationId };
     if (query.status) {
       where.status = query.status;
     }
@@ -28,8 +28,10 @@ export class ProgramsService {
     return this.programsRepository.find(findOptions);
   }
 
-  async findOne(id: string): Promise<Program> {
-    const program = await this.programsRepository.findOne({ where: { id } });
+  async findOne(id: string, organizationId?: string): Promise<Program> {
+    const where: any = { id };
+    if (organizationId) where.organizationId = organizationId;
+    const program = await this.programsRepository.findOne({ where });
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
@@ -41,8 +43,8 @@ export class ProgramsService {
     return this.programsRepository.save(program);
   }
 
-  async update(id: string, updateData: any): Promise<Program> {
-    const program = await this.findOne(id);
+  async update(id: string, organizationId: string, updateData: any): Promise<Program> {
+    const program = await this.findOne(id, organizationId);
     if (updateData.isActive !== undefined) {
       program.isActive = updateData.isActive;
     }
@@ -50,8 +52,8 @@ export class ProgramsService {
     return this.programsRepository.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
-    const program = await this.findOne(id);
+  async remove(id: string, organizationId: string): Promise<void> {
+    const program = await this.findOne(id, organizationId);
     await this.programsRepository.remove(program);
   }
 }

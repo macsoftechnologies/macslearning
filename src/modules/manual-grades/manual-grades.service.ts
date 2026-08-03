@@ -29,12 +29,14 @@ export class ManualGradesService {
     // 2. Get students
     const students = await this.userRepository.createQueryBuilder('user')
       .where('user.id IN (:...studentIds)', { studentIds })
+      .andWhere('user.organizationId = :organizationId', { organizationId })
       .select(['user.id', 'user.fullName', 'user.email'])
       .getMany();
 
-    // 3. Get existing offline grades
+    // 3. Get existing offline grades — filtered by organizationId
     const existingGrades = await this.offlineGradeRepository.createQueryBuilder('grade')
       .where('grade.studentId IN (:...studentIds)', { studentIds })
+      .andWhere('grade.organizationId = :organizationId', { organizationId })
       .andWhere('grade.academicBatchId = :batchId', { batchId })
       .andWhere('grade.semesterId = :semesterId', { semesterId })
       .andWhere('grade.courseId = :courseId', { courseId })
@@ -65,7 +67,7 @@ export class ManualGradesService {
   async bulkUpsert(gradesData: any[]) {
     const results = [];
     for (const data of gradesData) {
-      const { studentId, courseId, semesterId, academicBatchId, assignmentScore, finalExamScore } = data;
+      const { studentId, courseId, semesterId, academicBatchId, assignmentScore, finalExamScore, organizationId } = data;
       const totalScore = Number(assignmentScore) + Number(finalExamScore);
 
       // Determine grade based on image provided (simplified for now)
@@ -80,8 +82,12 @@ export class ManualGradesService {
       else if (totalScore >= 45) grade = 'C';
       else if (totalScore >= 40) grade = 'C-';
 
+      // Include organizationId in the lookup to prevent cross-org overwrites
+      const whereClause: any = { studentId, courseId, semesterId, academicBatchId };
+      if (organizationId) whereClause.organizationId = organizationId;
+
       let existing = await this.offlineGradeRepository.findOne({
-        where: { studentId, courseId, semesterId, academicBatchId },
+        where: whereClause,
       });
 
       if (existing) {
@@ -96,6 +102,7 @@ export class ManualGradesService {
           courseId,
           semesterId,
           academicBatchId,
+          organizationId,
           assignmentScore,
           finalExamScore,
           totalScore,

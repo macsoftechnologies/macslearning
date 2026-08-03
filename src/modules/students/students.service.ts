@@ -328,17 +328,20 @@ export class StudentsService {
         // Totals
         const tVideos = await this.lessonRepository.createQueryBuilder('lesson')
           .where('lesson.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('lesson.organizationId = :organizationId', { organizationId })
           .andWhere('lesson.type = :type', { type: 'VIDEO' })
           .select('lesson.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('lesson.courseId').getRawMany();
         totalVideosMap = new Map(tVideos.map(v => [v.courseId, parseInt(v.count, 10)]));
 
         const tExams = await this.examRepository.createQueryBuilder('exam')
           .where('exam.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('exam.organizationId = :organizationId', { organizationId })
           .select('exam.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('exam.courseId').getRawMany();
         totalExamsMap = new Map(tExams.map(e => [e.courseId, parseInt(e.count, 10)]));
 
         const tAssignments = await this.assignmentRepository.createQueryBuilder('assignment')
           .where('assignment.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('assignment.organizationId = :organizationId', { organizationId })
           .select('assignment.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('assignment.courseId').getRawMany();
         totalAssignmentsMap = new Map(tAssignments.map(a => [a.courseId, parseInt(a.count, 10)]));
 
@@ -376,12 +379,12 @@ export class StudentsService {
       ...courses.map((c: any) => c.semesterId)
     ].filter(Boolean))];
 
-    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
-    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
-    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).andWhere('program.organizationId = :organizationId', { organizationId }).getMany() : [];
+    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).andWhere('batch.organizationId = :organizationId', { organizationId }).getMany() : [];
+    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).andWhere('semester.organizationId = :organizationId', { organizationId }).getMany() : [];
 
-    // Fetch offline grades
-    const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId } });
+    // Fetch offline grades — filtered by organizationId
+    const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
 
     // Filter enrollments based on courses actually found (useful if faculty filtering was applied)
     const validCourseIds = new Set(courses.map((c: any) => c.id));

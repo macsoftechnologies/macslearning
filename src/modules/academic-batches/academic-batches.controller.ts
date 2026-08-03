@@ -17,8 +17,8 @@ export class AcademicBatchesController {
 
   @Get(':id')
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
-  findOne(@Param('id') id: string) {
-    return this.batchesService.findOne(id);
+  findOne(@Request() req: any, @Param('id') id: string) {
+    return this.batchesService.findOne(id, req.user.organizationId);
   }
 
   @Post()
@@ -30,13 +30,13 @@ export class AcademicBatchesController {
 
   @Put(':id')
   @Roles('SUPER_ADMIN', 'ORG_USER')
-  update(@Param('id') id: string, @Body() updateData: any) {
-    return this.batchesService.update(id, updateData);
+  update(@Request() req: any, @Param('id') id: string, @Body() updateData: any) {
+    return this.batchesService.update(id, req.user.organizationId, updateData);
   }
 
   @Delete(':id')
   @Roles('SUPER_ADMIN', 'ORG_USER')
-  remove(@Param('id') id: string) {
-    return this.batchesService.remove(id);
+  remove(@Request() req: any, @Param('id') id: string) {
+    return this.batchesService.remove(id, req.user.organizationId);
   }
 }

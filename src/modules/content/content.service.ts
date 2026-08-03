@@ -40,7 +40,7 @@ export class ContentService {
     courseId: string,
     moduleData: any,
   ) {
-    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
     const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
 
     const courseModule = this.moduleRepository.create({
@@ -88,7 +88,7 @@ export class ContentService {
     moduleId: string,
     lessonData: any,
   ) {
-    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
     const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
 
     const lesson = this.lessonRepository.create({
@@ -119,7 +119,7 @@ export class ContentService {
     moduleId: string,
     updateData: any,
   ) {
-    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
     if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
       updateData.contentStatus = 'IN_REVIEW';
     }
@@ -158,7 +158,7 @@ export class ContentService {
     lessonId: string,
     updateData: any,
   ) {
-    const course = await this.courseRepository.findOne({ where: { id: courseId } });
+    const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
     if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
       updateData.contentStatus = 'IN_REVIEW';
     }

@@ -16,8 +16,10 @@ export class AcademicBatchesService {
     return this.batchRepository.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async findOne(id: string): Promise<AcademicBatch> {
-    const batch = await this.batchRepository.findOne({ where: { id } });
+  async findOne(id: string, organizationId?: string): Promise<AcademicBatch> {
+    const where: any = { id };
+    if (organizationId) where.organizationId = organizationId;
+    const batch = await this.batchRepository.findOne({ where });
     if (!batch) {
       throw new NotFoundException(`Batch with ID ${id} not found`);
     }
@@ -29,14 +31,14 @@ export class AcademicBatchesService {
     return this.batchRepository.save(batch);
   }
 
-  async update(id: string, updateData: Partial<AcademicBatch>): Promise<AcademicBatch> {
-    const batch = await this.findOne(id);
+  async update(id: string, organizationId: string, updateData: Partial<AcademicBatch>): Promise<AcademicBatch> {
+    const batch = await this.findOne(id, organizationId);
     const updated = this.batchRepository.merge(batch, updateData);
     return this.batchRepository.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
-    const batch = await this.findOne(id);
+  async remove(id: string, organizationId: string): Promise<void> {
+    const batch = await this.findOne(id, organizationId);
     await this.batchRepository.remove(batch);
   }
 }
