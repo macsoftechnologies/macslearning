@@ -55,13 +55,7 @@ export class ContentController {
   @Get('modules')
   @Roles('ORG_USER', 'FACULTY', 'STUDENT')
   async getModules(@Request() req: any, @Param('courseId') courseId: string) {
-    if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        courseId,
-      );
-    }
+    // Purposefully skipping enrollment check here so students can view the curriculum outline (module titles)
     return this.contentService.getModules(courseId, req.user.organizationId, req.user.userType);
   }
 
