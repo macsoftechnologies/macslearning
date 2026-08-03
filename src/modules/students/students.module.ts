@@ -17,6 +17,7 @@ import { Submission } from '../assignments/entities/submission.entity';
 import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
+import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
 @Module({
   imports: [
@@ -32,7 +33,8 @@ import { Semester } from '../semesters/entities/semester.entity';
       Submission,
       Program,
       AcademicBatch,
-      Semester
+      Semester,
+      OfflineGrade
     ]),
     UsersModule,
     EnrollmentModule,

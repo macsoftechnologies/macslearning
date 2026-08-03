@@ -20,6 +20,7 @@ import { Submission } from '../assignments/entities/submission.entity';
 import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
+import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
 @Injectable()
 export class StudentsService {
@@ -37,6 +38,7 @@ export class StudentsService {
     @InjectRepository(Program) private programRepository: Repository<Program>,
     @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
     @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
+    @InjectRepository(OfflineGrade) private offlineGradeRepository: Repository<OfflineGrade>,
   ) {}
 
   async getAllStudents(organizationId: string, queryDto: any) {
@@ -375,6 +377,9 @@ export class StudentsService {
     const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
     const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
 
+    // Fetch offline grades
+    const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId } });
+
     // Filter enrollments based on courses actually found (useful if faculty filtering was applied)
     const validCourseIds = new Set(courses.map((c: any) => c.id));
     const filteredEnrollments = enrollments
@@ -386,6 +391,7 @@ export class StudentsService {
         program: programs.find(p => p.id === e.programId) || null,
         batch: batches.find(b => b.id === e.batchId) || null,
         semester: semesters.find(s => s.id === e.semesterId) || null,
+        grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === e.semesterId || !g.semesterId)) || null,
         curriculum: {
           videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
           exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },
