@@ -388,43 +388,161 @@ export class CertificatesService {
 
     const filePath = path.join(uploadsDir, filename);
 
+    // Try to find the template
+    let template = null;
+    if (program.certificateTemplateId) {
+      template = await this.templateRepository.findOne({
+        where: { id: program.certificateTemplateId },
+      });
+    }
+
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
     const page = pdfDoc.addPage([842, 595]); // A4 Landscape
-    
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    page.drawText('Degree Certificate', {
-      x: 250,
-      y: 480,
-      size: 40,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    page.drawText('This is to certify that', { x: 320, y: 400, size: 20, font });
-    page.drawText(student.fullName, {
-      x: 320,
-      y: 350,
-      size: 30,
-      font: boldFont,
-      color: rgb(0.17, 0.24, 0.31),
-    });
-    page.drawText('has successfully completed all requirements for the', { x: 200, y: 280, size: 20, font });
-    page.drawText(program.name, {
-      x: 200,
-      y: 230,
-      size: 30,
-      font: boldFont,
-      color: rgb(0.16, 0.5, 0.72),
-    });
-    page.drawText(`Certificate Number: ${certificateNumber}`, { x: 320, y: 150, size: 15, font });
-    page.drawText(`Issued On: ${new Date().toLocaleDateString()}`, { x: 320, y: 120, size: 15, font });
+    if (template) {
+      // Custom Template logic
+      if (template.backgroundType === 'IMAGE' && template.backgroundImageUrl) {
+        try {
+          const bgPath = path.join(
+            process.cwd(),
+            'public',
+            template.backgroundImageUrl,
+          );
+          const imageBytes = fs.readFileSync(bgPath);
+          const bgImage = template.backgroundImageUrl
+            .toLowerCase()
+            .endsWith('.png')
+            ? await pdfDoc.embedPng(imageBytes)
+            : await pdfDoc.embedJpg(imageBytes);
+
+          page.drawImage(bgImage, {
+            x: 0,
+            y: 0,
+            width: page.getWidth(),
+            height: page.getHeight(),
+          });
+        } catch (e) {
+          console.error('Failed to load background image', e);
+        }
+      }
+
+      const defaultFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      // Draw images first so they act as background/watermarks behind text
+      for (const field of (template.fields || []).filter(
+        (f: any) => f.type === 'image',
+      )) {
+        if (field.url) {
+          try {
+            const imgPath = path.join(process.cwd(), 'public', field.url);
+            const imgBytes = fs.readFileSync(imgPath);
+            const embeddedImg = field.url.toLowerCase().endsWith('.png')
+              ? await pdfDoc.embedPng(imgBytes)
+              : await pdfDoc.embedJpg(imgBytes);
+
+            const width = field.width || embeddedImg.width;
+            const height = field.height || embeddedImg.height;
+            const pdfX = field.x - width / 2;
+            const imgPdfY = page.getHeight() - field.y - height / 2;
+
+            page.drawImage(embeddedImg, {
+              x: pdfX,
+              y: imgPdfY,
+              width,
+              height,
+              opacity: field.opacity !== undefined ? field.opacity : 1,
+            });
+          } catch (e) {
+            console.error('Failed to draw image field', e);
+          }
+        }
+      }
+
+      // Draw text second so it sits on top
+      for (const field of (template.fields || []).filter(
+        (f: any) => f.type === 'text',
+      )) {
+        let textToDraw = field.value || '';
+        if (field.variable === 'student_name') textToDraw = student.fullName;
+        if (field.variable === 'course_title') textToDraw = program.name;
+        if (field.variable === 'completion_date')
+          textToDraw = new Date().toLocaleDateString();
+        if (field.variable === 'certificate_number')
+          textToDraw = certificateNumber;
+
+        let color = rgb(0, 0, 0);
+        if (field.color) {
+          try {
+            const r = parseInt(field.color.substring(1, 3), 16) / 255;
+            const g = parseInt(field.color.substring(3, 5), 16) / 255;
+            const b = parseInt(field.color.substring(5, 7), 16) / 255;
+            color = rgb(r, g, b);
+          } catch (e) {}
+        }
+
+        // Scale font size by 0.9 because PDF HelveticaBold is significantly wider than frontend fallback fonts
+        const fontSize = (field.fontSize || 16) * 0.9;
+        const textWidth = defaultFont.widthOfTextAtSize(textToDraw, fontSize);
+
+        const pdfX = field.x - textWidth / 2;
+        // Better baseline approximation for HelveticaBold
+        const pdfY = page.getHeight() - field.y - fontSize / 2.5;
+
+        page.drawText(textToDraw, {
+          x: pdfX,
+          y: pdfY,
+          size: fontSize,
+          font: defaultFont,
+          color,
+        });
+      }
+    } else {
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      page.drawText('Degree Certificate', {
+        x: 250,
+        y: 480,
+        size: 40,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText('This is to certify that', { x: 320, y: 400, size: 20, font });
+      page.drawText(student.fullName, {
+        x: 320,
+        y: 350,
+        size: 30,
+        font: boldFont,
+        color: rgb(0.17, 0.24, 0.31),
+      });
+      page.drawText('has successfully completed all requirements for the', { x: 200, y: 280, size: 20, font });
+      page.drawText(program.name, {
+        x: 200,
+        y: 230,
+        size: 30,
+        font: boldFont,
+        color: rgb(0.16, 0.5, 0.72),
+      });
+      page.drawText(`Certificate Number: ${certificateNumber}`, { x: 320, y: 150, size: 15, font });
+      page.drawText(`Issued On: ${new Date().toLocaleDateString()}`, { x: 320, y: 120, size: 15, font });
+    }
 
     const pdfBytes = await pdfDoc.save();
     fs.writeFileSync(filePath, pdfBytes);
 
     const certificateUrl = `/uploads/certificates/${filename}`;
+
+    const existing = await this.certificateRepository.findOne({
+      where: { organizationId, studentId, courseId: programId }
+    });
+
+    if (existing) {
+      existing.certificateNumber = certificateNumber;
+      existing.certificateUrl = certificateUrl;
+      existing.issuedAt = new Date();
+      return this.certificateRepository.save(existing);
+    }
 
     const certificate = this.certificateRepository.create({
       organizationId,
