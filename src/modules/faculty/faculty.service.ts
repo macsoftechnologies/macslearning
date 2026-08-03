@@ -10,6 +10,8 @@ import { Attempt } from '../exams/entities/attempt.entity';
 import { Thread } from '../discussion/entities/thread.entity';
 import { User } from '../users/entities/user.entity';
 import { Lesson } from '../content/entities/lesson.entity';
+import { Program } from '../programs/entities/program.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Injectable()
 export class FacultyService {
@@ -26,6 +28,8 @@ export class FacultyService {
     @InjectRepository(Thread) private threadRepository: Repository<Thread>,
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Lesson) private lessonRepository: Repository<Lesson>,
+    @InjectRepository(Program) private programRepository: Repository<Program>,
+    @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
   ) {}
 
   async getDashboardStats(organizationId: string, facultyId: string) {
@@ -270,14 +274,24 @@ export class FacultyService {
       throw new Error('Faculty not found');
     }
 
-    // 2. Fetch Courses taught by this faculty
     const courses = await this.courseRepository
       .createQueryBuilder('course')
       .where('course.organizationId = :organizationId', { organizationId })
       .andWhere('course.instructorIds LIKE :facultyId', { facultyId: `%${facultyId}%` })
       .andWhere('course.isDeleted = :isDeleted', { isDeleted: false })
-      .select(['course.id', 'course.title', 'course.status', 'course.createdAt', 'course.thumbnailUrl'])
+      .select(['course.id', 'course.title', 'course.status', 'course.createdAt', 'course.thumbnailUrl', 'course.programId', 'course.semesterId'])
       .getMany();
+
+    const programIds = [...new Set(courses.map(c => c.programId).filter(Boolean))];
+    const semesterIds = [...new Set(courses.map(c => c.semesterId).filter(Boolean))];
+
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
+    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
+
+    courses.forEach(course => {
+      (course as any).program = programs.find(p => p.id === course.programId) || null;
+      (course as any).semester = semesters.find(s => s.id === course.semesterId) || null;
+    });
 
     const courseIds = courses.map((c) => c.id);
 

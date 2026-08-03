@@ -61,6 +61,10 @@ export class CreateCourseDto {
   @IsOptional()
   programId?: string;
 
+  @IsString()
+  @IsOptional()
+  semesterId?: string;
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
@@ -119,6 +123,10 @@ export class UpdateCourseDto {
   @IsString()
   @IsOptional()
   programId?: string;
+
+  @IsString()
+  @IsOptional()
+  semesterId?: string;
 
   @IsArray()
   @IsString({ each: true })

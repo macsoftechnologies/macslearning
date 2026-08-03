@@ -58,10 +58,28 @@ export class ContentService {
     if (userType === 'STUDENT') {
       whereClause.contentStatus = 'PUBLISHED';
     }
-    return this.moduleRepository.find({
+    const modules = await this.moduleRepository.find({
       where: whereClause,
       order: { orderIndex: 'ASC' },
     });
+
+    if (modules.length > 0) {
+      const { In } = require('typeorm');
+      const moduleIds = modules.map(m => m.id);
+      const lessonWhere: any = { moduleId: In(moduleIds), isDeleted: false };
+      if (userType === 'STUDENT') {
+        lessonWhere.contentStatus = 'PUBLISHED';
+      }
+      const lessons = await this.lessonRepository.find({
+        where: lessonWhere,
+        order: { orderIndex: 'ASC' },
+      });
+      modules.forEach(m => {
+        (m as any).lessons = lessons.filter(l => l.moduleId === m.id);
+      });
+    }
+
+    return modules;
   }
 
   async createLesson(

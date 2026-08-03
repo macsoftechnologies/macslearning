@@ -12,6 +12,8 @@ import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { PaymentModule } from '../payment/payment.module';
 import { CoursesModule } from '../courses/courses.module';
 import { Program } from '../programs/entities/program.entity';
+import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { Program } from '../programs/entities/program.entity';
       Lesson,
       LessonProgress,
       Program,
+      AcademicBatch,
+      Semester,
     ]),
     BullModule.registerQueue({
       name: 'enrollment',

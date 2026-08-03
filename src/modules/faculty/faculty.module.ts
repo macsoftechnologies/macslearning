@@ -11,6 +11,8 @@ import { Attempt } from '../exams/entities/attempt.entity';
 import { Thread } from '../discussion/entities/thread.entity';
 import { User } from '../users/entities/user.entity';
 import { Lesson } from '../content/entities/lesson.entity';
+import { Program } from '../programs/entities/program.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { Lesson } from '../content/entities/lesson.entity';
       Thread,
       User,
       Lesson,
+      Program,
+      Semester,
     ]),
   ],
   controllers: [FacultyController],

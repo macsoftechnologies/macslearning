@@ -17,6 +17,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Injectable()
 export class EnrollmentService {
@@ -29,6 +30,8 @@ export class EnrollmentService {
     @InjectRepository(LessonProgress)
     private lessonProgressRepository: Repository<LessonProgress>,
     @InjectRepository(Program) private programRepository: Repository<Program>,
+    @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
+    @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -592,12 +595,23 @@ export class EnrollmentService {
       completedMap[p.courseId] = (completedMap[p.courseId] || 0) + 1;
     }
 
+    const programIds = [...new Set(mappedEnrollments.map(e => e.programId).filter(Boolean))];
+    const batchIds = [...new Set(mappedEnrollments.map(e => e.batchId).filter(Boolean))];
+    const semesterIds = [...new Set(mappedEnrollments.map(e => e.semesterId).filter(Boolean))];
+
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
+    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
+    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
+
     return mappedEnrollments.map((e) => {
       const cId = e.courseId.id || '';
       const total = totalLessonsMap[cId] || 0;
       const completed = completedMap[cId] || 0;
       return {
         ...e,
+        program: programs.find(p => p.id === e.programId) || null,
+        batch: batches.find(b => b.id === e.batchId) || null,
+        semester: semesters.find(s => s.id === e.semesterId) || null,
         progressPercentage:
           total === 0 ? 0 : Math.round((completed / total) * 100),
       };
