@@ -60,6 +60,7 @@ export class CoursesService {
     status?: string,
     userType?: string,
     userId?: string,
+    programId?: string,
   ) {
     const { page = 1, limit = 10, search } = queryDto;
     const skip = (page - 1) * limit;
@@ -68,6 +69,10 @@ export class CoursesService {
       .createQueryBuilder('course')
       .where('course.organizationId = :organizationId', { organizationId })
       .andWhere('course.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (programId) {
+      queryBuilder.andWhere('course.programId = :programId', { programId });
+    }
 
     if (userType === 'STUDENT') {
       queryBuilder.andWhere('course.status = :status', { status: 'PUBLISHED' });

@@ -57,6 +57,10 @@ export class CreateCourseDto {
   @Type(() => PricingDto)
   pricing?: PricingDto;
 
+  @IsString()
+  @IsOptional()
+  programId?: string;
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
@@ -111,6 +115,10 @@ export class UpdateCourseDto {
   @ValidateNested()
   @Type(() => PricingDto)
   pricing?: PricingDto;
+
+  @IsString()
+  @IsOptional()
+  programId?: string;
 
   @IsArray()
   @IsString({ each: true })

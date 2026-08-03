@@ -74,6 +74,7 @@ export class CoursesController {
     @Request() req: any,
     @Query() query: PaginationQueryDto,
     @Query('status') status?: string,
+    @Query('programId') programId?: string,
   ) {
     return this.coursesService.getCourses(
       req.user.organizationId,
@@ -81,6 +82,7 @@ export class CoursesController {
       status,
       req.user.userType,
       req.user.userId,
+      programId,
     );
   }
 
