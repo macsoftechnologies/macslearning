@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Query } from '@nestjs/common';
 import { ProgramsService } from './programs.service';
 
 @Controller('programs')
@@ -6,8 +6,8 @@ export class ProgramsController {
   constructor(private readonly programsService: ProgramsService) {}
 
   @Get()
-  async findAll() {
-    return this.programsService.findAll();
+  async findAll(@Query() query: any) {
+    return this.programsService.findAll(query);
   }
 
   @Get(':id')

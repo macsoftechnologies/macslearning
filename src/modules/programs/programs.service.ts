@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like } from 'typeorm';
 import { Program } from './entities/program.entity';
 
 @Injectable()
@@ -10,8 +10,22 @@ export class ProgramsService {
     private programsRepository: Repository<Program>,
   ) {}
 
-  async findAll(): Promise<Program[]> {
-    return this.programsRepository.find({ order: { createdAt: 'DESC' } });
+  async findAll(query: any = {}): Promise<Program[]> {
+    const where: any = {};
+    if (query.status) {
+      where.status = query.status;
+    }
+    
+    let findOptions: any = { where, order: { createdAt: 'DESC' } };
+    
+    if (query.search) {
+      findOptions.where = [
+        { ...where, name: Like(`%${query.search}%`) },
+        { ...where, description: Like(`%${query.search}%`) }
+      ];
+    }
+    
+    return this.programsRepository.find(findOptions);
   }
 
   async findOne(id: string): Promise<Program> {
