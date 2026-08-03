@@ -371,7 +371,10 @@ export class StudentsService {
     // Fetch Programs, Batches, Semesters for these enrollments
     const programIds = [...new Set(enrollments.map(e => e.programId).filter(Boolean))];
     const batchIds = [...new Set(enrollments.map(e => e.batchId).filter(Boolean))];
-    const semesterIds = [...new Set(enrollments.map(e => e.semesterId).filter(Boolean))];
+    const semesterIds = [...new Set([
+      ...enrollments.map(e => e.semesterId),
+      ...courses.map((c: any) => c.semesterId)
+    ].filter(Boolean))];
 
     const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
     const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
@@ -390,8 +393,8 @@ export class StudentsService {
         courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
         program: programs.find(p => p.id === e.programId) || null,
         batch: batches.find(b => b.id === e.batchId) || null,
-        semester: semesters.find(s => s.id === e.semesterId) || null,
-        grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === e.semesterId || !g.semesterId)) || null,
+        semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
+        grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId) || !g.semesterId)) || null,
         curriculum: {
           videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
           exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },

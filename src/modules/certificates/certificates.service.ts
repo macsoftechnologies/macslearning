@@ -126,9 +126,16 @@ export class CertificatesService {
         },
       });
       if (!passingRecord) {
-        throw new BadRequestException(
-          'Cannot generate certificate until the student has a published passing assessment result',
-        );
+        // Fallback to checking manual grades
+        const offlineGrade = await this.offlineGradeRepository.findOne({
+          where: { studentId, courseId }
+        });
+        
+        if (!offlineGrade) {
+          throw new BadRequestException(
+            'Cannot generate certificate until the student has a published passing assessment result or manual grade',
+          );
+        }
       }
     }
 
