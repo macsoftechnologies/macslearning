@@ -9,6 +9,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { User } from '../users/entities/user.entity';
 import { Course } from '../courses/entities/course.entity';
+import { Program } from '../programs/entities/program.entity';
 
 @Injectable()
 export class PaymentService {
@@ -24,6 +25,7 @@ export class PaymentService {
       .createQueryBuilder('payment')
       .leftJoin(User, 'student', 'student.id = payment.studentId')
       .leftJoin(Course, 'course', 'course.id = payment.courseId')
+      .leftJoin(Program, 'program', 'program.id = payment.programId')
       .where('payment.organizationId = :organizationId', { organizationId })
       .select([
         'payment.*',
@@ -32,6 +34,8 @@ export class PaymentService {
         'student.email as student_email',
         'course.id as course_id',
         'course.title as course_title',
+        'program.id as program_id',
+        'program.name as program_name',
       ]);
 
     if (search) {
@@ -57,6 +61,7 @@ export class PaymentService {
         email: d.student_email,
       },
       courseId: { _id: d.course_id, id: d.course_id, title: d.course_title },
+      programId: { _id: d.program_id, id: d.program_id, name: d.program_name },
     }));
 
     return createPaginatedResponse(mappedData, totalItems, page, limit);
@@ -70,6 +75,7 @@ export class PaymentService {
       .createQueryBuilder('payment')
       .leftJoin(User, 'student', 'student.id = payment.studentId')
       .leftJoin(Course, 'course', 'course.id = payment.courseId')
+      .leftJoin(Program, 'program', 'program.id = payment.programId')
       .select([
         'payment.*',
         'student.id as student_id',
@@ -77,6 +83,8 @@ export class PaymentService {
         'student.email as student_email',
         'course.id as course_id',
         'course.title as course_title',
+        'program.id as program_id',
+        'program.name as program_name',
       ]);
 
     if (search) {
@@ -102,6 +110,7 @@ export class PaymentService {
         email: d.student_email,
       },
       courseId: { _id: d.course_id, id: d.course_id, title: d.course_title },
+      programId: { _id: d.program_id, id: d.program_id, name: d.program_name },
     }));
 
     return createPaginatedResponse(mappedData, totalItems, page, limit);
@@ -118,12 +127,15 @@ export class PaymentService {
     const queryBuilder = this.paymentRepository
       .createQueryBuilder('payment')
       .leftJoin(Course, 'course', 'course.id = payment.courseId')
+      .leftJoin(Program, 'program', 'program.id = payment.programId')
       .where('payment.organizationId = :organizationId', { organizationId })
       .andWhere('payment.studentId = :studentId', { studentId })
       .select([
         'payment.*',
         'course.id as course_id',
         'course.title as course_title',
+        'program.id as program_id',
+        'program.name as program_name',
       ]);
 
     if (search) {
@@ -143,6 +155,7 @@ export class PaymentService {
     const mappedData = dataRaw.map((d) => ({
       ...d,
       courseId: { _id: d.course_id, id: d.course_id, title: d.course_title },
+      programId: { _id: d.program_id, id: d.program_id, name: d.program_name },
     }));
 
     return createPaginatedResponse(mappedData, totalItems, page, limit);
