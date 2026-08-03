@@ -16,7 +16,9 @@ import { Attempt } from '../exams/entities/attempt.entity';
 import { Lesson } from '../content/entities/lesson.entity';
 import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { Assignment } from '../assignments/entities/assignment.entity';
-import { Submission } from '../assignments/entities/submission.entity';
+import { Program } from '../programs/entities/program.entity';
+import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Injectable()
 export class StudentsService {
@@ -31,6 +33,9 @@ export class StudentsService {
     @InjectRepository(LessonProgress) private lessonProgressRepository: Repository<LessonProgress>,
     @InjectRepository(Assignment) private assignmentRepository: Repository<Assignment>,
     @InjectRepository(Submission) private submissionRepository: Repository<Submission>,
+    @InjectRepository(Program) private programRepository: Repository<Program>,
+    @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
+    @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
   ) {}
 
   async getAllStudents(organizationId: string, queryDto: any) {
@@ -360,6 +365,15 @@ export class StudentsService {
       }
     }
 
+    // Fetch Programs, Batches, Semesters for these enrollments
+    const programIds = [...new Set(enrollments.map(e => e.programId).filter(Boolean))];
+    const batchIds = [...new Set(enrollments.map(e => e.batchId).filter(Boolean))];
+    const semesterIds = [...new Set(enrollments.map(e => e.semesterId).filter(Boolean))];
+
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).getMany() : [];
+    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).getMany() : [];
+    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).getMany() : [];
+
     // Filter enrollments based on courses actually found (useful if faculty filtering was applied)
     const validCourseIds = new Set(courses.map((c: any) => c.id));
     const filteredEnrollments = enrollments
@@ -368,6 +382,9 @@ export class StudentsService {
         ...e,
         course: courses.find((c: any) => c.id === e.courseId),
         courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
+        program: programs.find(p => p.id === e.programId) || null,
+        batch: batches.find(b => b.id === e.batchId) || null,
+        semester: semesters.find(s => s.id === e.semesterId) || null,
         curriculum: {
           videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
           exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },

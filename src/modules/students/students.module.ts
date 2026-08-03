@@ -14,6 +14,9 @@ import { Lesson } from '../content/entities/lesson.entity';
 import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { Assignment } from '../assignments/entities/assignment.entity';
 import { Submission } from '../assignments/entities/submission.entity';
+import { Program } from '../programs/entities/program.entity';
+import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Module({
   imports: [
@@ -26,7 +29,10 @@ import { Submission } from '../assignments/entities/submission.entity';
       Lesson, 
       LessonProgress, 
       Assignment, 
-      Submission
+      Submission,
+      Program,
+      AcademicBatch,
+      Semester
     ]),
     UsersModule,
     EnrollmentModule,
