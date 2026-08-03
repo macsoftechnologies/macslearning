@@ -10,13 +10,13 @@ export class AcademicBatchesController {
   constructor(private readonly batchesService: AcademicBatchesService) {}
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
   findAll(@Request() req: any, @Query('programId') programId?: string) {
     return this.batchesService.findAll(req.user.organizationId, programId);
   }
 
   @Get(':id')
-  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
   findOne(@Param('id') id: string) {
     return this.batchesService.findOne(id);
   }
