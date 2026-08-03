@@ -16,6 +16,7 @@ import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/entities/user.entity';
 import { Program } from '../programs/entities/program.entity';
+import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 
 @Injectable()
 export class EnrollmentService {
@@ -525,6 +526,7 @@ export class EnrollmentService {
     const enrollments = await this.enrollmentRepository
       .createQueryBuilder('enrollment')
       .leftJoin(Course, 'course', 'course.id = enrollment.courseId')
+      .leftJoin(AcademicBatch, 'batch', 'batch.id = enrollment.batchId')
       .where('enrollment.studentId = :studentId', { studentId })
       .andWhere('enrollment.organizationId = :organizationId', {
         organizationId,
@@ -536,21 +538,33 @@ export class EnrollmentService {
         'course.description as course_description',
         'course.status as course_status',
         'course.pricing as course_pricing',
+        'batch.courseMappings as batch_mappings'
       ])
       .orderBy('enrollment.createdAt', 'DESC')
       .getRawMany();
 
-    const mappedEnrollments = enrollments.map((e) => ({
-      ...e,
-      courseId: {
-        _id: e.course_id,
-        id: e.course_id,
-        title: e.course_title,
-        description: e.course_description,
-        status: e.course_status,
-        pricing: e.course_pricing,
-      },
-    }));
+    const mappedEnrollments = enrollments.map((e) => {
+      let mappings: any = {};
+      try {
+        if (typeof e.batch_mappings === 'string') mappings = JSON.parse(e.batch_mappings);
+        else if (e.batch_mappings) mappings = e.batch_mappings;
+      } catch(err){}
+      
+      const isPublishedInBatch = mappings[e.course_id]?.status === 'PUBLISHED';
+      
+      return {
+        ...e,
+        isPublishedInBatch,
+        courseId: {
+          _id: e.course_id,
+          id: e.course_id,
+          title: e.course_title,
+          description: e.course_description,
+          status: e.course_status,
+          pricing: e.course_pricing,
+        },
+      };
+    }).filter(e => e.isPublishedInBatch);
 
     if (mappedEnrollments.length === 0) return mappedEnrollments;
 
