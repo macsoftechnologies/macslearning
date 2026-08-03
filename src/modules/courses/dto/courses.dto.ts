@@ -64,8 +64,8 @@ export class CreateCourseDto {
   regionalPrices?: RegionPriceDto[];
 
   @IsString()
-  @IsNotEmpty()
-  coursePlanId: string;
+  @IsOptional()
+  coursePlanId?: string;
 
   @IsNumber()
   @IsOptional()
