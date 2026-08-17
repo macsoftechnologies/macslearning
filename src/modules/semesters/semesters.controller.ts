@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Request, UseGuards, Query } from '@nestjs/common';
 import { SemestersService } from './semesters.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -54,5 +54,37 @@ export class SemestersController {
   async remove(@Request() req: any, @Param('id') id: string) {
     await this.semestersService.remove(id, req.user.organizationId);
     return { success: true, message: 'Semester deleted successfully' };
+  }
+
+  @Post(':id/courses/:courseId/link')
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async linkCourse(
+    @Request() req: any,
+    @Param('id') semesterId: string,
+    @Param('courseId') courseId: string,
+    @Body() body: { programId: string }
+  ) {
+    return this.semestersService.linkCourse(
+      req.user.organizationId,
+      body.programId,
+      semesterId,
+      courseId
+    );
+  }
+
+  @Delete(':id/courses/:courseId/link')
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async unlinkCourse(
+    @Request() req: any,
+    @Param('id') semesterId: string,
+    @Param('courseId') courseId: string,
+    @Query('programId') programId: string
+  ) {
+    return this.semestersService.unlinkCourse(
+      req.user.organizationId,
+      programId,
+      semesterId,
+      courseId
+    );
   }
 }

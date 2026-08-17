@@ -26,7 +26,7 @@ export class Lesson {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'enum', enum: ['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE'] })
+  @Column({ type: 'enum', enum: ['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'], default: 'MIXED' })
   type: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -34,6 +34,9 @@ export class Lesson {
 
   @Column({ type: 'varchar', nullable: true })
   videoUrl: string;
+
+  @Column({ type: 'json', nullable: true })
+  attachments: any[];
 
   @Column({ type: 'int', nullable: true, default: 0 })
   durationMinutes: number;

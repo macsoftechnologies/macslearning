@@ -31,6 +31,10 @@ export class RegionPriceDto {
   @IsNumber()
   @Type(() => Number)
   price: number;
+
+  @IsString()
+  @IsOptional()
+  currency?: string;
 }
 
 export class CreateCourseDto {
@@ -41,6 +45,11 @@ export class CreateCourseDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  credits?: number;
 
 
   @IsArray()
@@ -57,13 +66,10 @@ export class CreateCourseDto {
   @Type(() => PricingDto)
   pricing?: PricingDto;
 
-  @IsString()
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
-  programId?: string;
-
-  @IsString()
-  @IsOptional()
-  semesterId?: string;
+  programIds?: string[];
 
   @IsArray()
   @IsOptional()
@@ -107,6 +113,11 @@ export class UpdateCourseDto {
   @IsOptional()
   description?: string;
 
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  credits?: number;
+
   @IsEnum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'])
   @IsOptional()
   status?: string;
@@ -120,13 +131,10 @@ export class UpdateCourseDto {
   @Type(() => PricingDto)
   pricing?: PricingDto;
 
-  @IsString()
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
-  programId?: string;
-
-  @IsString()
-  @IsOptional()
-  semesterId?: string;
+  programIds?: string[];
 
   @IsArray()
   @IsString({ each: true })

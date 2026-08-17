@@ -14,6 +14,7 @@ import { AssessmentResult } from '../results/entities/assessmentResult.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CoursesService } from '../courses/courses.service';
 import { User } from '../users/entities/user.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
 
 @Injectable()
 export class ExamsService {
@@ -24,6 +25,7 @@ export class ExamsService {
     @InjectRepository(Attempt) private attemptRepository: Repository<Attempt>,
     @InjectRepository(AssessmentResult)
     private resultRepository: Repository<AssessmentResult>,
+    @InjectRepository(Enrollment) private enrollmentRepository: Repository<Enrollment>,
     @InjectQueue('exams') private examsQueue: Queue,
     private notificationsService: NotificationsService,
     private coursesService: CoursesService,
@@ -416,6 +418,14 @@ export class ExamsService {
 
     await this.resultRepository.save(result);
 
+    // If passed, mark the course enrollment as COMPLETED
+    if (isPassed) {
+      await this.enrollmentRepository.update(
+        { studentId, courseId: exam.courseId, organizationId, status: 'ACTIVE' },
+        { status: 'COMPLETED' }
+      );
+    }
+
     // Notify the course faculty
     try {
       const course = await this.coursesService.getCourseById(exam.courseId, organizationId);
@@ -679,6 +689,14 @@ export class ExamsService {
         isPassed,
       });
       await this.resultRepository.save(result);
+    }
+
+    // If passed, mark the course enrollment as COMPLETED
+    if (isPassed) {
+      await this.enrollmentRepository.update(
+        { studentId: attempt.studentId, courseId: exam.courseId, organizationId, status: 'ACTIVE' },
+        { status: 'COMPLETED' }
+      );
     }
 
     // Notify student that their short-answer has been graded

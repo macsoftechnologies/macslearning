@@ -5,6 +5,7 @@ import { Course } from './entities/course.entity';
 import { CoursePlan } from '../organizations/entities/course-plan.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
 import { User } from '../users/entities/user.entity';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class CoursesService {
     @InjectRepository(Course) private courseRepository: Repository<Course>,
     @InjectRepository(CoursePlan)
     private coursePlanRepository: Repository<CoursePlan>,
+    @InjectRepository(ProgramCourseMapping)
+    private programCourseMappingRepository: Repository<ProgramCourseMapping>,
   ) {}
 
   async createCourse(
@@ -21,28 +24,43 @@ export class CoursesService {
     courseData: any,
   ) {
     const slug = this.generateCourseSlug(courseData?.title);
+    const { programIds, ...restCourseData } = courseData;
 
-    let validityDays = courseData.validityDays || 0;
-    if (courseData.coursePlanId) {
+    let validityDays = restCourseData.validityDays || 0;
+    if (restCourseData.coursePlanId) {
       const plan = await this.coursePlanRepository.findOne({
-        where: { id: courseData.coursePlanId },
+        where: { id: restCourseData.coursePlanId },
       });
       if (!plan) throw new NotFoundException('Course plan not found');
       validityDays = plan.validityDays || 0;
     }
 
     const course = this.courseRepository.create({
-      ...courseData,
+      ...restCourseData,
       slug,
       validityDays,
       organizationId,
       instructorIds:
-        courseData.instructorIds && courseData.instructorIds.length > 0
-          ? courseData.instructorIds
+        restCourseData.instructorIds && restCourseData.instructorIds.length > 0
+          ? restCourseData.instructorIds
           : [creatorId],
       createdBy: creatorId,
     });
-    return this.courseRepository.save(course as any) as unknown as Course;
+    const savedCourse = await this.courseRepository.save(course as any) as unknown as Course;
+
+    if (programIds && Array.isArray(programIds)) {
+      for (const programId of programIds) {
+        const mapping = this.programCourseMappingRepository.create({
+          organizationId,
+          courseId: savedCourse.id,
+          programId,
+          // semesterId is optional now, so we leave it null/undefined
+        });
+        await this.programCourseMappingRepository.save(mapping);
+      }
+    }
+
+    return savedCourse;
   }
 
   private generateCourseSlug(title?: string): string {
@@ -61,6 +79,7 @@ export class CoursesService {
     userType?: string,
     userId?: string,
     programId?: string,
+    semesterId?: string,
   ) {
     const { page = 1, limit = 10, search } = queryDto;
     const skip = (page - 1) * limit;
@@ -71,7 +90,22 @@ export class CoursesService {
       .andWhere('course.isDeleted = :isDeleted', { isDeleted: false });
 
     if (programId) {
-      queryBuilder.andWhere('course.programId = :programId', { programId });
+      queryBuilder.innerJoin(
+        'program_course_mappings',
+        'pcm',
+        'pcm.courseId = course.id AND pcm.programId = :programId',
+        { programId }
+      );
+      if (semesterId) {
+        queryBuilder.andWhere('pcm.semesterId = :semesterId', { semesterId });
+      }
+    } else if (semesterId) {
+      queryBuilder.innerJoin(
+        'program_course_mappings',
+        'pcm',
+        'pcm.courseId = course.id AND pcm.semesterId = :semesterId',
+        { semesterId }
+      );
     }
 
     if (userType === 'STUDENT') {
@@ -135,7 +169,12 @@ export class CoursesService {
 
     const course = await queryBuilder.getOne();
     if (!course) throw new NotFoundException('Course not found');
-    return course;
+
+    const mappings = await this.programCourseMappingRepository.find({
+      where: { courseId: course.id }
+    });
+    
+    return { ...course, programIds: mappings.map(m => m.programId) };
   }
 
   async updateCourse(
@@ -143,17 +182,33 @@ export class CoursesService {
     organizationId: string,
     updateData: any,
   ) {
+    const { programIds, ...restUpdateData } = updateData;
     const updateFields: any = {};
-    for (const [key, value] of Object.entries(updateData || {})) {
+    for (const [key, value] of Object.entries(restUpdateData || {})) {
       if (value !== undefined) {
         updateFields[key] = value;
       }
     }
 
-    await this.courseRepository.update(
-      { id: courseId, organizationId, isDeleted: false },
-      updateFields,
-    );
+    if (Object.keys(updateFields).length > 0) {
+      await this.courseRepository.update(
+        { id: courseId, organizationId, isDeleted: false },
+        updateFields,
+      );
+    }
+    
+    if (programIds !== undefined && Array.isArray(programIds)) {
+      await this.programCourseMappingRepository.delete({ courseId });
+      for (const programId of programIds) {
+        await this.programCourseMappingRepository.save(
+          this.programCourseMappingRepository.create({
+            organizationId,
+            courseId,
+            programId
+          })
+        );
+      }
+    }
     const course = await this.courseRepository.findOne({
       where: { id: courseId, organizationId, isDeleted: false },
     });

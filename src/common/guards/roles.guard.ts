@@ -24,6 +24,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User type not found in token');
     }
     if (!requiredRoles.includes(user.userType)) {
+      console.log('RolesGuard failed for userType:', user.userType, 'required:', requiredRoles);
       throw new ForbiddenException('Access denied: insufficient privileges');
     }
     return true;

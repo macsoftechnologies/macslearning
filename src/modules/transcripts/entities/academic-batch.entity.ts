@@ -26,6 +26,27 @@ export class AcademicBatch {
   @Column({ type: 'json' })
   courseMappings: any;
 
+  @Column({ type: 'date', nullable: true })
+  startDate: Date;
+
+  @Column({ type: 'date', nullable: true })
+  endDate: Date;
+
+  @Column({ type: 'date', nullable: true })
+  enrollmentOpenDate: Date;
+
+  @Column({ type: 'date', nullable: true })
+  enrollmentCloseDate: Date;
+
+  @Column({ type: 'enum', enum: ['UPCOMING', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], default: 'UPCOMING' })
+  status: string;
+
+  @Column({ type: 'int', nullable: true })
+  maxStudents: number;
+
+  @Column({ type: 'int', default: 0 })
+  currentEnrolledCount: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

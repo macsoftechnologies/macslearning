@@ -11,6 +11,7 @@ import { Exam } from './entities/exam.entity';
 import { Question } from './entities/question.entity';
 import { Attempt } from './entities/attempt.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { AssessmentResult } from '../results/entities/assessmentResult.entity';
     BullModule.registerQueue({
       name: 'exams',
     }),
-    TypeOrmModule.forFeature([Exam, Question, Attempt, AssessmentResult]),
+    TypeOrmModule.forFeature([Exam, Question, Attempt, AssessmentResult, Enrollment]),
   ],
   controllers: [ExamsController],
   providers: [ExamsService, ExamsProcessor],

@@ -76,6 +76,87 @@ export class OrganizationsController {
     return org;
   }
 
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN')
+  async getMyOrganization(@Request() req: any) {
+    return this.organizationsService.getOrganizationById(
+      req.user.organizationId,
+    );
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN')
+  async updateMyOrganization(
+    @Request() req: any,
+    @Body() updateData: UpdateOrganizationDto,
+  ) {
+    const org = await this.organizationsService.updateOrganization(
+      req.user.organizationId,
+      updateData,
+    );
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: req.user.organizationId,
+      action: 'Organization Updated',
+      targetId: org.id,
+      metadata: { name: org.name },
+    });
+    return org;
+  }
+
+  // --- Course Plans ---
+  @Get('me/course-plans')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN', 'FACULTY')
+  async getMyCoursePlans(@Request() req: any) {
+    return this.organizationsService.getCoursePlans(req.user.organizationId);
+  }
+
+  @Post('me/course-plans')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN')
+  async createMyCoursePlan(@Request() req: any, @Body() planData: any) {
+    return this.organizationsService.createCoursePlan(
+      req.user.organizationId,
+      planData,
+    );
+  }
+
+  @Patch('me/course-plans/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN')
+  async updateMyCoursePlan(
+    @Request() req: any,
+    @Param('planId') planId: string,
+    @Body() planData: any,
+  ) {
+    return this.organizationsService.updateCoursePlan(
+      req.user.organizationId,
+      planId,
+      planData,
+    );
+  }
+
+  @Delete('me/course-plans/:planId')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles('ORG_USER', 'ORG_ADMIN')
+  async deleteMyCoursePlan(
+    @Request() req: any,
+    @Param('planId') planId: string,
+  ) {
+    return this.organizationsService.deleteCoursePlan(
+      req.user.organizationId,
+      planId,
+    );
+  }
+
+  @Post('register')
+  @ApiOperation({ summary: 'Public endpoint to register a new organization and admin' })
+  async registerOrganization(@Body() registrationData: any) {
+    return this.organizationsService.registerOrganization(registrationData);
+  }
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('SUPER_ADMIN')
@@ -161,16 +242,16 @@ export class OrganizationsController {
 
   @Get(':id/storage')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('SUPER_ADMIN', 'ORG_USER')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'ORG_ADMIN')
   @RequirePermissions(PERMISSIONS.TRACK_ORGANIZATIONS)
-  @ApiOperation({ summary: 'Get total video storage used by organization on Vimeo' })
+  @ApiOperation({ summary: 'Get total video storage used by organization' })
   async getOrganizationStorage(@Param('id') orgId: string) {
     // 1. Fetch organization name from DB using orgId
     const org = await this.organizationsService.getOrganizationById(orgId);
     if (!org) {
       return { usedBytes: 0, usedMB: 0 };
     }
-    // 2. Query Vimeo
+    // 2. Query local video storage (dev mode – no Vimeo)
     const bytes = await this.vimeoService.getOrganizationFolderStorage(org.name);
     return {
       usedBytes: bytes,
@@ -199,85 +280,4 @@ export class OrganizationsController {
     return org;
   }
 
-  @Get('me')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER')
-  async getMyOrganization(@Request() req: any) {
-    return this.organizationsService.getOrganizationById(
-      req.user.organizationId,
-    );
-  }
-
-  @Patch('me')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER')
-  async updateMyOrganization(
-    @Request() req: any,
-    @Body() updateData: UpdateOrganizationDto,
-  ) {
-    const org = await this.organizationsService.updateOrganization(
-      req.user.organizationId,
-      updateData,
-    );
-    await this.auditService.createLog({
-      actorId: req.user.userId,
-      organizationId: req.user.organizationId,
-      action: 'Organization Updated',
-      targetId: org.id,
-      metadata: { name: org.name },
-    });
-    return org;
-  }
-
-  // --- Course Plans ---
-  @Get('me/course-plans')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER', 'FACULTY')
-  async getMyCoursePlans(@Request() req: any) {
-    return this.organizationsService.getCoursePlans(req.user.organizationId);
-  }
-
-  @Post('me/course-plans')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER')
-  async createMyCoursePlan(@Request() req: any, @Body() planData: any) {
-    return this.organizationsService.createCoursePlan(
-      req.user.organizationId,
-      planData,
-    );
-  }
-
-  @Patch('me/course-plans/:planId')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER')
-  async updateMyCoursePlan(
-    @Request() req: any,
-    @Param('planId') planId: string,
-    @Body() planData: any,
-  ) {
-    return this.organizationsService.updateCoursePlan(
-      req.user.organizationId,
-      planId,
-      planData,
-    );
-  }
-
-  @Delete('me/course-plans/:planId')
-  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles('ORG_USER')
-  async deleteMyCoursePlan(
-    @Request() req: any,
-    @Param('planId') planId: string,
-  ) {
-    return this.organizationsService.deleteCoursePlan(
-      req.user.organizationId,
-      planId,
-    );
-  }
-
-  @Post('register')
-  @ApiOperation({ summary: 'Public endpoint to register a new organization and admin' })
-  async registerOrganization(@Body() registrationData: any) {
-    return this.organizationsService.registerOrganization(registrationData);
-  }
 }

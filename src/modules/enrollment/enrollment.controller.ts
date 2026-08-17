@@ -48,6 +48,7 @@ export class EnrollmentController {
       programId,
       body.batchId,
       req.user.regionId,
+      body.selectedCourseIds,
     );
   }
 

@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsArray
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -46,33 +47,7 @@ export class CreateLessonDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE'])
-  type: string;
-
-  @Type(() => Number)
-  @IsNumber()
-  @IsOptional()
-  order?: number;
-
-  @IsString()
-  @IsOptional()
-  contentUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  videoUrl?: string;
-}
-
-export class UpdateLessonDto {
-  @IsString()
-  @IsOptional()
-  title?: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE'])
+  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'])
   @IsOptional()
   type?: string;
 
@@ -88,4 +63,39 @@ export class UpdateLessonDto {
   @IsString()
   @IsOptional()
   videoUrl?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachments?: any[];
+}
+
+export class UpdateLessonDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'])
+  @IsOptional()
+  type?: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  order?: number;
+
+  @IsString()
+  @IsOptional()
+  contentUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoUrl?: string;
+
+  @IsArray()
+  @IsOptional()
+  attachments?: any[];
 }

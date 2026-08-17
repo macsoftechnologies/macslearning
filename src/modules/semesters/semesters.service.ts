@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Semester } from './entities/semester.entity';
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
 
 @Injectable()
 export class SemestersService {
   constructor(
     @InjectRepository(Semester)
     private semestersRepository: Repository<Semester>,
+    @InjectRepository(ProgramCourseMapping)
+    private mappingRepository: Repository<ProgramCourseMapping>,
   ) {}
 
   async findAll(organizationId: string): Promise<Semester[]> {
@@ -57,5 +60,31 @@ export class SemestersService {
   async remove(id: string, organizationId: string): Promise<void> {
     const semester = await this.findOne(id, organizationId);
     await this.semestersRepository.remove(semester);
+  }
+
+  async linkCourse(organizationId: string, programId: string, semesterId: string, courseId: string) {
+    const existing = await this.mappingRepository.findOne({
+      where: { organizationId, programId, semesterId, courseId }
+    });
+    if (!existing) {
+      const mapping = this.mappingRepository.create({
+        organizationId,
+        programId,
+        semesterId,
+        courseId
+      });
+      await this.mappingRepository.save(mapping);
+    }
+    return { success: true };
+  }
+
+  async unlinkCourse(organizationId: string, programId: string, semesterId: string, courseId: string) {
+    await this.mappingRepository.delete({
+      organizationId,
+      programId,
+      semesterId,
+      courseId
+    });
+    return { success: true };
   }
 }

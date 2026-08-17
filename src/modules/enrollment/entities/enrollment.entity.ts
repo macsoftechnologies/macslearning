@@ -4,7 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn
 } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
+import { AcademicBatch } from '../../transcripts/entities/academic-batch.entity';
 
 @Entity('enrollments')
 export class Enrollment {
@@ -17,6 +21,10 @@ export class Enrollment {
   @Column({ type: 'varchar' })
   studentId: string;
 
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'studentId' })
+  student: User;
+
   @Column({ type: 'varchar', nullable: true })
   courseId: string;
 
@@ -28,6 +36,10 @@ export class Enrollment {
 
   @Column({ type: 'varchar', nullable: true })
   batchId: string;
+
+  @ManyToOne(() => AcademicBatch)
+  @JoinColumn({ name: 'batchId' })
+  batch: AcademicBatch;
 
   @Column({
     type: 'enum',
@@ -51,6 +63,12 @@ export class Enrollment {
 
   @Column({ type: 'varchar', nullable: true })
   createdBy: string;
+
+  @Column({ type: 'date', nullable: true })
+  expectedGraduationDate: Date;
+
+  @Column({ type: 'enum', enum: ['PAID_IN_FULL', 'PAY_PER_COURSE'], nullable: true })
+  paymentModel: string;
 
   @CreateDateColumn()
   createdAt: Date;

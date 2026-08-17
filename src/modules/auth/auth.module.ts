@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from '../../common/strategies/jwt.strategy';
 import { Organization } from '../organizations/entities/org.entity';
+import { StudentProfile } from '../students/entities/student-profile.entity';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
@@ -14,7 +15,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     UsersModule,
     NotificationsModule,
-    TypeOrmModule.forFeature([Organization]),
+    TypeOrmModule.forFeature([Organization, StudentProfile]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

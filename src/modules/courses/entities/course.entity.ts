@@ -23,7 +23,7 @@ export class Course {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'int', nullable: true, default: 3 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, default: 3.0 })
   credits: number;
 
   @Column({

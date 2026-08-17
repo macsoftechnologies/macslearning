@@ -14,6 +14,8 @@ import { CoursesModule } from '../courses/courses.module';
 import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
+import { RegionConfig } from '../regions/entities/region-config.entity';
+import { RegionCohort } from '../academic-batches/entities/batch.entity';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { Semester } from '../semesters/entities/semester.entity';
       Program,
       AcademicBatch,
       Semester,
+      RegionConfig,
+      RegionCohort,
     ]),
     BullModule.registerQueue({
       name: 'enrollment',

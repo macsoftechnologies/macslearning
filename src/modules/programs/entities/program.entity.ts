@@ -26,6 +26,12 @@ export class Program {
   @Column({ type: 'int', default: 30 })
   totalSubjects: number;
 
+  @Column({ type: 'int', nullable: true })
+  maxDurationYears: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  degreeTitle: string;
+
   @Column({ type: 'json', nullable: true })
   pricing: any;
 

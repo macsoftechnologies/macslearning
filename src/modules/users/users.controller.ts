@@ -77,7 +77,13 @@ export class UsersController {
     @Request() req: any,
     @Param('id') userId: string,
     @Body() updateData: UpdateUserDto,
+    @Body('customProfile') customProfileRaw: any,
   ) {
+    console.log('--- PATCH USER ---');
+    console.log('customProfileRaw:', customProfileRaw);
+    if (customProfileRaw) {
+      (updateData as any).customProfile = customProfileRaw;
+    }
     return this.usersService.updateUser(userId, updateData, {
       userType: req.user.userType,
       organizationId: req.user.organizationId,
@@ -161,7 +167,11 @@ export class UsersController {
   async createStudent(
     @Request() req: any,
     @Body() studentData: CreateStudentDto,
+    @Body('customProfile') customProfileRaw: any,
   ) {
+    if (customProfileRaw) {
+      studentData.customProfile = customProfileRaw;
+    }
     return this.usersService.createStudent(
       req.user.organizationId,
       studentData,

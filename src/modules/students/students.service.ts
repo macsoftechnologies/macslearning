@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { User } from '../users/entities/user.entity';
@@ -22,10 +22,14 @@ import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
+import { StudentProfile } from './entities/student-profile.entity';
+
 @Injectable()
 export class StudentsService {
   constructor(
+      private dataSource: DataSource,
     @InjectRepository(User) private userRepository: Repository<User>,
+    @InjectRepository(StudentProfile) private studentProfileRepository: Repository<StudentProfile>,
     @InjectRepository(Enrollment)
     private enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(Course) private courseRepository: Repository<Course>,
@@ -48,19 +52,10 @@ export class StudentsService {
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoin(Region, 'region', 'region.id = user.regionId')
+      .leftJoinAndSelect('user.studentProfile', 'sp')
       .where('user.organizationId = :organizationId', { organizationId })
       .andWhere('user.userType = :userType', { userType: 'STUDENT' })
-      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false })
-      .select([
-        'user.id',
-        'user.fullName',
-        'user.email',
-        'user.mobile',
-        'user.status',
-        'user.createdAt',
-        'region.id',
-        'region.name',
-      ]);
+      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false });
 
     if (search) {
       queryBuilder.andWhere(
@@ -69,23 +64,29 @@ export class StudentsService {
       );
     }
 
-    const dataRaw = await queryBuilder
+    const [users, totalItems] = await queryBuilder
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
-      .getRawMany();
-    const totalItems = await queryBuilder.getCount();
+      .getManyAndCount();
 
-    const data = dataRaw.map((d) => ({
-      _id: d.user_id,
-      id: d.user_id,
-      fullName: d.user_fullName,
-      email: d.user_email,
-      mobile: d.user_mobile,
-      status: d.user_status,
-      createdAt: d.user_createdAt,
-      regionId: { _id: d.region_id, id: d.region_id, name: d.region_name },
-    }));
+    const data = users.map((userEntity) => {
+      return {
+        _id: userEntity.id,
+        id: userEntity.id,
+        fullName: userEntity.fullName,
+        email: userEntity.email,
+        mobile: userEntity.mobile,
+        status: userEntity.status,
+        createdAt: userEntity.createdAt,
+        customProfile: userEntity.customProfile || {}, 
+        regionId: (userEntity as any).region ? { 
+           _id: (userEntity as any).region.id, 
+           id: (userEntity as any).region.id, 
+           name: (userEntity as any).region.name 
+        } : null,
+      };
+    });
 
     if (data.length > 0) {
       const studentIds = data.map((s) => s.id);
@@ -123,9 +124,12 @@ export class StudentsService {
         userType: 'STUDENT',
         isDeleted: false,
       },
+      relations: { studentProfile: true },
     });
     if (!student) throw new NotFoundException('Student not found');
     delete (student as any).passwordHash;
+    // customProfile is already loaded directly on user
+    return student;
     return student;
   }
 
@@ -134,10 +138,6 @@ export class StudentsService {
     organizationId: string,
     updateData: any,
   ) {
-    await this.userRepository.update(
-      { id: studentId, organizationId, userType: 'STUDENT', isDeleted: false },
-      updateData,
-    );
     const student = await this.userRepository.findOne({
       where: {
         id: studentId,
@@ -147,8 +147,35 @@ export class StudentsService {
       },
     });
     if (!student) throw new NotFoundException('Student not found');
-    delete (student as any).passwordHash;
-    return student;
+
+    const userUpdateFields = ['fullName', 'mobile', 'regionId'];
+    const userPayload: any = {};
+    const profilePayload: any = {};
+
+    for (const key of Object.keys(updateData)) {
+      if (userUpdateFields.includes(key)) {
+        userPayload[key] = updateData[key];
+      } else {
+        profilePayload[key] = updateData[key];
+      }
+    }
+
+    if (Object.keys(userPayload).length > 0) {
+      await this.userRepository.update(
+        { id: studentId, organizationId, userType: 'STUDENT', isDeleted: false },
+        userPayload,
+      );
+    }
+
+    if (Object.keys(profilePayload).length > 0) {
+      const customProfile = student.customProfile || {};
+      Object.assign(customProfile, profilePayload);
+      await this.userRepository.update({ id: studentId }, { customProfile });
+    }
+
+    const updatedStudent = await this.userRepository.findOne({ where: { id: studentId } });
+    delete (updatedStudent as any).passwordHash;
+    return updatedStudent;
   }
 
   async deleteStudent(studentId: string, organizationId: string) {
@@ -173,20 +200,11 @@ export class StudentsService {
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoin(Region, 'region', 'region.id = user.regionId')
+      .leftJoinAndSelect('user.studentProfile', 'sp')
       .where('user.organizationId = :organizationId', { organizationId })
       .andWhere('user.userType = :userType', { userType: 'STUDENT' })
       .andWhere('user.status = :status', { status: 'PENDING' })
-      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false })
-      .select([
-        'user.id',
-        'user.fullName',
-        'user.email',
-        'user.mobile',
-        'user.status',
-        'user.createdAt',
-        'region.id',
-        'region.name',
-      ]);
+      .andWhere('user.isDeleted = :isDeleted', { isDeleted: false });
 
     if (search) {
       queryBuilder.andWhere(
@@ -195,23 +213,29 @@ export class StudentsService {
       );
     }
 
-    const dataRaw = await queryBuilder
+    const [users, totalItems] = await queryBuilder
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
-      .getRawMany();
-    const totalItems = await queryBuilder.getCount();
+      .getManyAndCount();
 
-    const data = dataRaw.map((d) => ({
-      _id: d.user_id,
-      id: d.user_id,
-      fullName: d.user_fullName,
-      email: d.user_email,
-      mobile: d.user_mobile,
-      status: d.user_status,
-      createdAt: d.user_createdAt,
-      regionId: { _id: d.region_id, id: d.region_id, name: d.region_name },
-    }));
+    const data = users.map((userEntity) => {
+      return {
+        _id: userEntity.id,
+        id: userEntity.id,
+        fullName: userEntity.fullName,
+        email: userEntity.email,
+        mobile: userEntity.mobile,
+        status: userEntity.status,
+        createdAt: userEntity.createdAt,
+        customProfile: userEntity.customProfile || {}, 
+        regionId: (userEntity as any).region ? { 
+           _id: (userEntity as any).region.id, 
+           id: (userEntity as any).region.id, 
+           name: (userEntity as any).region.name 
+        } : null,
+      };
+    });
 
     return createPaginatedResponse(data, totalItems, page, limit);
   }
@@ -290,10 +314,34 @@ export class StudentsService {
         mobile: true,
         status: true,
         createdAt: true,
+        customProfile: true,
+        regionId: true,
       },
     });
 
     if (!student) throw new NotFoundException('Student not found');
+    
+    // Ensure customProfile is an object
+    if (typeof (student as any).customProfile === 'string') {
+      try {
+        (student as any).customProfile = JSON.parse((student as any).customProfile);
+      } catch (e) {
+        (student as any).customProfile = {};
+      }
+    } else if (!(student as any).customProfile) {
+      (student as any).customProfile = {};
+    }
+    
+    // Map region name if exists
+    if ((student as any).regionId) {
+      try {
+        const regionRepo = this.dataSource.getRepository('Region');
+        const region = await regionRepo.findOne({ where: { id: (student as any).regionId } });
+        if (region) {
+          (student as any).regionId = { id: region.id, name: region.name };
+        }
+      } catch (e) {}
+    }
 
     // 2. Fetch Enrollments
     const enrollments = await this.enrollmentRepository.find({
@@ -325,11 +373,19 @@ export class StudentsService {
       
       const filteredCourseIds = courses.map(c => c.id);
       if (filteredCourseIds.length > 0) {
-        // Totals
+        // Total non-deleted lessons per course
+        const tLessons = await this.lessonRepository.createQueryBuilder('lesson')
+          .where('lesson.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('lesson.organizationId = :organizationId', { organizationId })
+          .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false })
+          .select('lesson.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('lesson.courseId').getRawMany();
+        const totalLessonsMap = new Map(tLessons.map(l => [l.courseId, parseInt(l.count, 10)]));
+
         const tVideos = await this.lessonRepository.createQueryBuilder('lesson')
           .where('lesson.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
           .andWhere('lesson.organizationId = :organizationId', { organizationId })
-          .andWhere('lesson.type = :type', { type: 'VIDEO' })
+          .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false })
+          .andWhere('(lesson.type = :type OR lesson.videoUrl IS NOT NULL)', { type: 'VIDEO' })
           .select('lesson.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('lesson.courseId').getRawMany();
         totalVideosMap = new Map(tVideos.map(v => [v.courseId, parseInt(v.count, 10)]));
 
@@ -345,13 +401,28 @@ export class StudentsService {
           .select('assignment.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('assignment.courseId').getRawMany();
         totalAssignmentsMap = new Map(tAssignments.map(a => [a.courseId, parseInt(a.count, 10)]));
 
-        // Completed
+        // Completed lessons per course
+        const cLessons = await this.lessonProgressRepository.createQueryBuilder('lp')
+          .where('lp.studentId = :studentId', { studentId })
+          .andWhere('lp.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('lp.isCompleted = :completed', { completed: true })
+          .select('lp.courseId', 'courseId')
+          .addSelect('COUNT(DISTINCT lp.lessonId)', 'count')
+          .groupBy('lp.courseId')
+          .getRawMany();
+        const completedLessonsMap = new Map(cLessons.map(l => [l.courseId, parseInt(l.count, 10)]));
+
+        // Completed lesson IDs
+        const allCompletedLps = await this.lessonProgressRepository.find({
+          where: { studentId, isCompleted: true }
+        });
+        const completedLessonIdsSet = new Set(allCompletedLps.map(p => p.lessonId));
+
         const cVideos = await this.lessonProgressRepository.createQueryBuilder('lp')
           .leftJoin(Lesson, 'lesson', 'lesson.id = lp.lessonId')
           .where('lp.studentId = :studentId', { studentId })
           .andWhere('lp.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
           .andWhere('lp.isCompleted = :completed', { completed: true })
-          .andWhere('lesson.type = :type', { type: 'VIDEO' })
           .select('lp.courseId', 'courseId').addSelect('COUNT(DISTINCT lp.lessonId)', 'count').groupBy('lp.courseId').getRawMany();
         completedVideosMap = new Map(cVideos.map(v => [v.courseId, parseInt(v.count, 10)]));
 
@@ -368,6 +439,11 @@ export class StudentsService {
           .andWhere('assignment.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
           .select('assignment.courseId', 'courseId').addSelect('COUNT(DISTINCT sub.assignmentId)', 'count').groupBy('assignment.courseId').getRawMany();
         completedAssignmentsMap = new Map(cAssignments.map(a => [a.courseId, parseInt(a.count, 10)]));
+
+        // Attach maps for enrollment building
+        (this as any)._tempTotalLessonsMap = totalLessonsMap;
+        (this as any)._tempCompletedLessonsMap = completedLessonsMap;
+        (this as any)._tempCompletedLessonIdsSet = completedLessonIdsSet;
       }
     }
 
@@ -386,24 +462,36 @@ export class StudentsService {
     // Fetch offline grades — filtered by organizationId
     const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
 
+    const totalLessonsMap = (this as any)._tempTotalLessonsMap || new Map();
+    const completedLessonsMap = (this as any)._tempCompletedLessonsMap || new Map();
+    const completedLessonIdsSet = (this as any)._tempCompletedLessonIdsSet || new Set();
+
     // Filter enrollments based on courses actually found (useful if faculty filtering was applied)
     const validCourseIds = new Set(courses.map((c: any) => c.id));
     const filteredEnrollments = enrollments
       .filter(e => validCourseIds.has(e.courseId))
-      .map(e => ({
-        ...e,
-        course: courses.find((c: any) => c.id === e.courseId),
-        courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
-        program: programs.find(p => p.id === e.programId) || null,
-        batch: batches.find(b => b.id === e.batchId) || null,
-        semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
-        grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId) || !g.semesterId)) || null,
-        curriculum: {
-          videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
-          exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },
-          assignments: { total: totalAssignmentsMap.get(e.courseId) || 0, completed: completedAssignmentsMap.get(e.courseId) || 0 },
-        }
-      }));
+      .map(e => {
+        const totalL = totalLessonsMap.get(e.courseId) || 0;
+        const compL = completedLessonsMap.get(e.courseId) || 0;
+        const progPct = totalL > 0 ? Math.round((compL / totalL) * 100) : 0;
+
+        return {
+          ...e,
+          progressPercentage: progPct,
+          course: courses.find((c: any) => c.id === e.courseId),
+          courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
+          program: programs.find(p => p.id === e.programId) || null,
+          batch: batches.find(b => b.id === e.batchId) || null,
+          semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
+          grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId) || !g.semesterId)) || null,
+          completedLessonIds: Array.from(completedLessonIdsSet),
+          curriculum: {
+            videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
+            exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },
+            assignments: { total: totalAssignmentsMap.get(e.courseId) || 0, completed: completedAssignmentsMap.get(e.courseId) || 0 },
+          }
+        };
+      });
 
     // 3. Fetch Exams/Attempts only for these filtered courses
     let attempts: any[] = [];

@@ -105,6 +105,10 @@ export class CreateStudentDto {
   @IsString()
   @IsNotEmpty()
   regionId: string;
+
+  @ApiPropertyOptional({ description: 'Custom profile data' })
+  @IsOptional()
+  customProfile?: Record<string, any>;
 }
 
 export class UpdateUserDto {

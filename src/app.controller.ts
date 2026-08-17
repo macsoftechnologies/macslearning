@@ -6,6 +6,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -18,15 +19,18 @@ import * as fs from 'fs';
 
 const storage = diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = './public/uploads/thumbnails';
+    const folder = (req.query.folder as string)?.replace(/[^a-zA-Z0-9_-]/g, '') || 'thumbnails';
+    const uploadPath = `./public/uploads/${folder}`;
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
+    const folder = (req.query.folder as string)?.replace(/[^a-zA-Z0-9_-]/g, '') || 'thumbnails';
+    const prefix = folder === 'thumbnails' ? 'thumb' : 'file';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `thumb-${uniqueSuffix}${extname(file.originalname)}`);
+    cb(null, `${prefix}-${uniqueSuffix}${extname(file.originalname)}`);
   },
 });
 
@@ -68,10 +72,52 @@ export class AppController {
       },
     }),
   )
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
+  uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('folder') folderQuery?: string,
+  ) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    return { url: `/uploads/thumbnails/${file.filename}` };
+    const folder = (folderQuery as string)?.replace(/[^a-zA-Z0-9_-]/g, '') || 'thumbnails';
+    return { url: `/uploads/${folder}/${file.filename}` };
+  }
+
+  @Post('upload/public')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage,
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+      fileFilter: (req, file, cb) => {
+        const allowed = [
+          '.jpg',
+          '.jpeg',
+          '.png',
+          '.gif',
+          '.webp',
+          '.pdf',
+          '.doc',
+          '.docx',
+          '.zip',
+        ];
+        const ext = extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) {
+          return cb(new BadRequestException('Unsupported file type'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadPublicFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('folder') folderQuery?: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    const folder = (folderQuery as string)?.replace(/[^a-zA-Z0-9_-]/g, '') || 'public';
+    return { url: `/uploads/${folder}/${file.filename}` };
   }
 }

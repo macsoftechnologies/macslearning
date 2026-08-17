@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { Organization } from '../organizations/entities/org.entity';
+import { StudentProfile } from '../students/entities/student-profile.entity';
 import { ChangePasswordDto, LoginDto } from './dto/auth.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +20,8 @@ export class AuthService {
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Organization)
     private organizationRepository: Repository<Organization>,
+    @InjectRepository(StudentProfile)
+    private studentProfileRepository: Repository<StudentProfile>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private notificationsService: NotificationsService,
@@ -173,6 +176,7 @@ export class AuthService {
         slug: organizationSlug,
         loginUrl: organizationLoginUrl,
         name: organizationName,
+        logoUrl: organization?.logoUrl,
       },
       user: {
         id: user.id,
@@ -185,6 +189,7 @@ export class AuthService {
         organizationSlug,
         organizationLoginUrl,
         organizationName,
+        organizationLogo: organization?.logoUrl,
         permissions: user.modulePermissions,
       },
     };
@@ -479,7 +484,7 @@ export class AuthService {
   }
 
   async register(registerDto: any) {
-    const { email, password, fullName, mobile, organizationCode, regionId } =
+    const { email, password, fullName, mobile, organizationCode, regionId, customProfile } =
       registerDto;
     let { organizationId } = registerDto;
 
@@ -545,9 +550,12 @@ export class AuthService {
       status: 'PENDING',
       organizationId,
       regionId,
+      customProfile: typeof customProfile === 'string' ? customProfile : JSON.stringify(customProfile || {}),
     });
 
     await this.userRepository.save(user);
+
+
 
     return { message: 'Registration successful. Awaiting admin approval.' };
   }

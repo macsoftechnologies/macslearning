@@ -8,10 +8,11 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersModule } from '../users/users.module';
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Course]),
+    TypeOrmModule.forFeature([Course, ProgramCourseMapping]),
     forwardRef(() => EnrollmentModule),
     OrganizationsModule,
     AuditModule,

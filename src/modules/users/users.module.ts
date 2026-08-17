@@ -7,8 +7,10 @@ import { Organization } from '../organizations/entities/org.entity';
 import { AuditModule } from '../audit/audit.module';
 import { FacultyModule } from '../faculty/faculty.module';
 
+import { StudentProfile } from '../students/entities/student-profile.entity';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Organization]), AuditModule, FacultyModule],
+  imports: [TypeOrmModule.forFeature([User, Organization, StudentProfile]), AuditModule, FacultyModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService, TypeOrmModule],

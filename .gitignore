@@ -45,3 +45,8 @@ logs/
 
 # Uploads folder (can be added based on your needs)
 public/uploads/
+
+# Temporary Scripts
+/scripts/
+force_sync.ts
+check_db.ts

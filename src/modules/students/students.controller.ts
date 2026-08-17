@@ -42,6 +42,21 @@ export class StudentsController {
     );
   }
 
+  @Get(':id/programs')
+  @Roles('ORG_USER', 'FACULTY', 'STUDENT')
+  async getStudentPrograms(
+    @Request() req: any,
+    @Param('id') studentId: string,
+  ) {
+    if (req.user.userType === 'STUDENT') {
+      studentId = req.user.userId;
+    }
+    return this.enrollmentService.getStudentPrograms(
+      studentId,
+      req.user.organizationId,
+    );
+  }
+
   @Get()
   @Roles('ORG_USER')
   async getAllStudents(

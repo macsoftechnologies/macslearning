@@ -5,7 +5,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Unique,
+  OneToOne,
 } from 'typeorm';
+import { StudentProfile } from '../../students/entities/student-profile.entity';
 
 @Entity('users')
 @Unique(['email', 'organizationId'])
@@ -115,4 +117,10 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'json', nullable: true })
+  customProfile: any;
+
+  @OneToOne(() => StudentProfile, profile => profile.user)
+  studentProfile: StudentProfile;
 }

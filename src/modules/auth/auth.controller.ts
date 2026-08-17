@@ -37,7 +37,10 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
+  async register(@Body() registerDto: RegisterDto, @Body('customProfile') customProfileRaw: any) {
+    if (customProfileRaw) {
+      (registerDto as any).customProfile = customProfileRaw;
+    }
     return this.authService.register(registerDto);
   }
 

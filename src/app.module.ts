@@ -32,6 +32,7 @@ import { ManualGradesModule } from './modules/manual-grades/manual-grades.module
 import { TranscriptsModule } from './modules/transcripts/transcripts.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AcademicBatchesModule } from './modules/academic-batches/academic-batches.module';
+import { FormQuestionsModule } from './modules/form-questions/form-questions.module';
 
 @Module({
   imports: [
@@ -49,7 +50,7 @@ import { AcademicBatchesModule } from './modules/academic-batches/academic-batch
         password: configService.get<string>('DB_PASSWORD') || '',
         database: configService.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
-        synchronize: true, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
+        synchronize: false, // EXPLICITLY DISABLED to prevent ANY data loss. Use migrations for DB changes.
         extra: {
           connectionLimit: 50, // Increased from default 10 to handle higher concurrency
         },
@@ -90,6 +91,7 @@ import { AcademicBatchesModule } from './modules/academic-batches/academic-batch
     TranscriptsModule,
     TransactionsModule,
     AcademicBatchesModule,
+    FormQuestionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

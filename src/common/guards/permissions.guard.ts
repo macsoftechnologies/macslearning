@@ -49,6 +49,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     if (!hasPermission) {
+      console.log('PermissionsGuard failed for user:', user.email, 'userType:', user.userType, 'hasPerms:', userPermissions, 'required:', requiredPermissions);
       throw new ForbiddenException('Access denied: insufficient privileges');
     }
 

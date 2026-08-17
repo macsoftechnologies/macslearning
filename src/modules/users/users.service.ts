@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
+import { Organization } from '../organizations/entities/org.entity';
+import { Region } from '../regions/entities/region.entity';
+import { StudentProfile } from '../students/entities/student-profile.entity';
+import { FacultyService } from '../faculty/faculty.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 
@@ -10,6 +14,11 @@ import { createPaginatedResponse } from '../../common/utils/pagination.util';
 export class UsersService {
   constructor(
     @InjectRepository(User) private userRepository: Repository<User>,
+    @InjectRepository(Organization)
+    private orgRepository: Repository<Organization>,
+    @InjectRepository(StudentProfile)
+    private studentProfileRepository: Repository<StudentProfile>,
+    private facultyService: FacultyService,
     private dataSource: DataSource,
   ) {}
 
@@ -47,7 +56,7 @@ export class UsersService {
   }
 
   async createStudent(organizationId: string, studentData: any) {
-    const { email, password, fullName, mobile, regionId } = studentData;
+    const { email, password, fullName, mobile, regionId, customProfile } = studentData;
 
     const existingUser = await this.userRepository.findOne({
       where: { email, organizationId },
@@ -73,7 +82,23 @@ export class UsersService {
       regionId,
     });
 
+    const profilePayload = { ...studentData };
+    // Remove base user fields from profile payload
+    const baseFields = ['email', 'password', 'fullName', 'mobile', 'regionId', 'customProfile'];
+    for (const field of baseFields) {
+      delete profilePayload[field];
+    }
+    
+    // Fallback if frontend sends nested customProfile anyway
+    const customProfileFields = studentData.customProfile || {};
+    
+    student.customProfile = {
+      ...profilePayload,
+      ...customProfileFields
+    };
+
     await this.userRepository.save(student);
+
     return { message: 'Student created successfully', userId: student.id };
   }
 
@@ -150,7 +175,12 @@ export class UsersService {
       .andWhere('user.isDeleted = :isDeleted', { isDeleted: false });
 
     if (userType) {
-      queryBuilder.andWhere('user.userType = :userType', { userType });
+      if (userType.includes(',')) {
+        const types = userType.split(',');
+        queryBuilder.andWhere('user.userType IN (:...userTypes)', { userTypes: types });
+      } else {
+        queryBuilder.andWhere('user.userType = :userType', { userType });
+      }
     }
 
     queryBuilder
@@ -207,11 +237,27 @@ export class UsersService {
       }
     }
 
+    let regionsMap: Record<string, any> = {};
+    try {
+      const regionIds = Array.from(new Set(data.map(u => u.regionId).filter(id => id)));
+      if (regionIds.length > 0) {
+        const regionRepo = this.dataSource.getRepository(Region);
+        const regions = await regionRepo.find({
+          where: { id: In(regionIds) },
+          select: { id: true, name: true }
+        });
+        regions.forEach(r => {
+          regionsMap[r.id] = r;
+        });
+      }
+    } catch (e) { console.error('REGION ERROR:', e); }
+
     const safeData = data.map((user) => {
       const { passwordHash, refreshTokens, ...rest } = user;
       return { 
         ...rest, 
-        coursesCount: coursesCountMap[user.id] || 0 
+        coursesCount: coursesCountMap[user.id] || 0,
+        region: rest.regionId ? regionsMap[rest.regionId] : null
       };
     });
 
@@ -266,11 +312,27 @@ export class UsersService {
       // Ignore if repo not found or other errors
     }
 
+    let regionsMapAll: Record<string, any> = {};
+    try {
+      const regionIds = Array.from(new Set(data.map(u => u.regionId).filter(id => id)));
+      if (regionIds.length > 0) {
+        const regionRepo = this.dataSource.getRepository(Region);
+        const regions = await regionRepo.find({
+          where: { id: In(regionIds) },
+          select: { id: true, name: true }
+        });
+        regions.forEach(r => {
+          regionsMapAll[r.id] = r;
+        });
+      }
+    } catch (e) { console.error('REGION ERROR:', e); }
+
     const safeData = data.map((user) => {
       const { passwordHash, refreshTokens, ...rest } = user;
       return {
         ...rest,
-        organizationName: rest.organizationId ? orgsMap[rest.organizationId] : null
+        organizationName: rest.organizationId ? orgsMap[rest.organizationId] : null,
+        region: rest.regionId ? regionsMapAll[rest.regionId] : null
       };
     });
 
@@ -285,6 +347,7 @@ export class UsersService {
     
     let organizationName = null;
     let organizationSlug = null;
+    let organizationLogo = null;
     if (user.organizationId) {
       try {
         const orgRepo = this.dataSource.getRepository('Organization');
@@ -294,6 +357,7 @@ export class UsersService {
         if (org) {
           organizationName = org.name;
           organizationSlug = org.slug;
+          organizationLogo = org.logoUrl;
         }
       } catch (err) {
         // Ignore
@@ -301,7 +365,7 @@ export class UsersService {
     }
 
     const { passwordHash, refreshTokens, ...safeUser } = user;
-    return { ...safeUser, organizationName, organizationSlug };
+    return { ...safeUser, organizationName, organizationSlug, organizationLogo };
   }
 
   async updateUser(userId: string, updateData: any, reqUser?: { userType: string; organizationId?: string; isSuperAdminEndpoint?: boolean }) {
@@ -325,7 +389,14 @@ export class UsersService {
       throw new UnauthorizedException('Cannot update Super Admin via this endpoint');
     }
 
-    await this.userRepository.update(userId, updateData);
+    // We use preload/save to ensure JSON columns are correctly serialized by TypeORM
+    const userPreloaded = await this.userRepository.preload({
+      id: userId,
+      ...updateData
+    });
+    if (userPreloaded) {
+      await this.userRepository.save(userPreloaded);
+    }
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException('User not found');
@@ -333,6 +404,7 @@ export class UsersService {
 
     let organizationName = null;
     let organizationSlug = null;
+    let organizationLogo = null;
     if (user.organizationId) {
       try {
         const orgRepo = this.dataSource.getRepository('Organization');
@@ -342,6 +414,7 @@ export class UsersService {
         if (org) {
           organizationName = org.name;
           organizationSlug = org.slug;
+          organizationLogo = org.logoUrl;
         }
       } catch (err) {
         // Ignore
@@ -349,7 +422,7 @@ export class UsersService {
     }
 
     const { passwordHash, refreshTokens, ...safeUser } = user;
-    return { ...safeUser, organizationName, organizationSlug };
+    return { ...safeUser, organizationName, organizationSlug, organizationLogo };
   }
 
   async findUsersByRole(organizationId: string, userType: string): Promise<string[]> {

@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +18,8 @@ import { User } from '../users/entities/user.entity';
 import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
+import { RegionConfig } from '../regions/entities/region-config.entity';
+import { RegionCohort } from '../academic-batches/entities/batch.entity';
 
 @Injectable()
 export class EnrollmentService {
@@ -32,6 +34,8 @@ export class EnrollmentService {
     @InjectRepository(Program) private programRepository: Repository<Program>,
     @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
     @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
+    @InjectRepository(RegionConfig) private regionConfigRepository: Repository<RegionConfig>,
+    @InjectRepository(RegionCohort) private regionCohortRepository: Repository<RegionCohort>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -58,18 +62,8 @@ export class EnrollmentService {
     let isPaid = false;
     let amount = 0;
 
-    // In MySQL, course.pricing might be a JSON object
-    const pricing = course.pricing;
-    if (pricing) {
-      isPaid = pricing.isPaid || false;
-      amount = parseFloat(pricing.amount) || 0;
-    }
-
-    if (
-      isPaid &&
-      regionId &&
-      course.regionalPrices
-    ) {
+    // 1. Check regional price first
+    if (regionId && course.regionalPrices) {
       let parsedPrices = course.regionalPrices;
       if (typeof parsedPrices === 'string') {
         try {
@@ -84,9 +78,22 @@ export class EnrollmentService {
             (p.regionId && p.regionId._id === regionId) ||
             (p.regionId && p.regionId.id === regionId),
         );
-        if (rp) {
+        if (rp && rp.price !== undefined && rp.price !== null) {
           amount = parseFloat(rp.price) || 0;
+          isPaid = true;
         }
+      }
+    }
+
+    // 2. Fallback to base pricing if no regional price matched
+    if (!isPaid) {
+      const pricing = course.pricing;
+      if (pricing?.isPaid) {
+        isPaid = true;
+        amount = parseFloat(pricing.amount) || 0;
+      } else if ((course as any).price) {
+        isPaid = true;
+        amount = parseFloat((course as any).price) || 0;
       }
     }
 
@@ -116,11 +123,32 @@ export class EnrollmentService {
       );
     }
 
+    // Link to program if applicable
+    let batchId: string | undefined = undefined;
+    if (course.programId) {
+      const programEnrollment = await this.enrollmentRepository.findOne({
+        where: {
+          organizationId,
+          studentId,
+          programId: course.programId,
+          status: 'ACTIVE',
+        },
+      });
+      // We assume courseId IS NULL is the program enrollment, but simply finding any active enrollment 
+      // for the program is enough to grab the batchId.
+      if (programEnrollment) {
+        batchId = programEnrollment.batchId;
+      }
+    }
+
     const enrollment = this.enrollmentRepository.create({
       organizationId,
       studentId,
       courseId,
-      paymentStatus: isPaid ? 'PAID' : 'NOT_APPLICABLE',
+      programId: course.programId,
+      semesterId: course.semesterId,
+      batchId,
+      paymentStatus: (isPaid && amount > 0) ? 'PAID' : 'NOT_APPLICABLE',
       source: 'SELF_ENROLL',
       paymentId: paymentRecord ? paymentRecord.id : undefined,
       expiresAt,
@@ -179,6 +207,7 @@ export class EnrollmentService {
     programId: string,
     batchId?: string,
     regionId?: string,
+    selectedCourseIds?: string[],
   ) {
     const program = await this.programRepository.findOne({
       where: { id: programId, organizationId }
@@ -188,91 +217,190 @@ export class EnrollmentService {
       throw new NotFoundException('Program not found');
     }
 
-    // 1. Fetch all courses for this program
+    if (!selectedCourseIds || !selectedCourseIds.length) {
+      throw new BadRequestException('No courses selected for this program');
+    }
+
+    // 1. Fetch all selected courses for this program
     const courses = await this.courseRepository.find({
-      where: { organizationId, programId, status: 'PUBLISHED' },
+      where: { organizationId, id: In(selectedCourseIds), status: 'PUBLISHED' },
     });
     
     if (!courses.length) {
-      throw new BadRequestException('No courses found for this program');
+      throw new BadRequestException('No valid courses found for this program');
     }
 
-    let isPaid = false;
-    let amount = 0;
-
-    const pricing = program.pricing;
-    if (pricing) {
-      isPaid = pricing.isPaid || false;
-      amount = parseFloat(pricing.amount) || 0;
-    }
-
-    if (isPaid && regionId && program.regionalPrices) {
-      let parsedPrices = program.regionalPrices;
-      if (typeof parsedPrices === 'string') {
-        try { parsedPrices = JSON.parse(parsedPrices); } catch (e) {}
-      }
-      
-      if (Array.isArray(parsedPrices)) {
-        const rp = parsedPrices.find(
-          (p: any) =>
-            p.regionId === regionId ||
-            (p.regionId && p.regionId._id === regionId) ||
-            (p.regionId && p.regionId.id === regionId),
-        );
-        if (rp) {
-          amount = parseFloat(rp.price) || 0;
-        }
-      }
-    }
-
-    // 2. Fetch or create a dummy payment (in real app, this happens via payment gateway)
-    let paymentRecord = null;
+    // 2. Determine expiration and graduation date
+    let expiresAt: Date | undefined = undefined;
+    let expectedGraduationDate: Date | undefined = undefined;
     
-    if (isPaid) {
-      const dummyPaymentId = `DUMMY-PROG-${uuidv4()}`;
-      const payment = this.paymentRepository.create({
-        organizationId,
-        studentId,
-        dummyPaymentId,
-        amount,
-        status: 'COMPLETED',
-        isPaid: true,
-        paidAt: new Date(),
-        createdBy: studentId,
-        programId: programId as any, // Assuming we can store programId on payment for tracking
-      });
-      paymentRecord = await this.paymentRepository.save(payment);
+    // We are no longer relying on course validity for programs. 
+    // Programs have maxDurationYears.
+    if (program.maxDurationYears && program.maxDurationYears > 0) {
+      const gradDate = new Date();
+      gradDate.setFullYear(gradDate.getFullYear() + program.maxDurationYears);
+      expectedGraduationDate = gradDate;
     }
 
-    // 3. Create enrollments for EVERY course in the program
-    const enrollmentsToCreate = courses.map(course => {
-      let expiresAt: Date | undefined = undefined;
-      if (course.validityDays && course.validityDays > 0) {
-        expiresAt = new Date(Date.now() + course.validityDays * 24 * 60 * 60 * 1000);
-      }
+    // Auto-Batch Generation Logic
+    const currentMonth = new Date().getMonth(); // 0-11
+    const currentYear = new Date().getFullYear();
+    const isFirstHalf = currentMonth < 6;
+    
+    // Attempt to get region name for the batch name
+    let regionNameStr = '';
+    if (regionId) {
+      try {
+        const regionObj = await this.batchRepository.manager.query(`SELECT name FROM regions WHERE id = ?`, [regionId]);
+        if (regionObj && regionObj.length > 0) {
+          regionNameStr = ` - ${regionObj[0].name}`;
+        }
+      } catch (err) {}
+    }
 
-      return this.enrollmentRepository.create({
+    const batchName = isFirstHalf 
+      ? `Jan-Jun ${currentYear}${regionNameStr}` 
+      : `Jul-Dec ${currentYear}${regionNameStr}`;
+      
+    // Check if this auto-batch exists
+    let activeBatch = await this.batchRepository.findOne({
+      where: {
         organizationId,
-        studentId,
-        courseId: course.id,
         programId,
-        batchId,
-        semesterId: course.semesterId,
-        paymentStatus: isPaid ? 'PAID' : 'NOT_APPLICABLE',
-        source: 'SELF_ENROLL',
-        paymentId: paymentRecord ? paymentRecord.id : undefined,
-        expiresAt,
+        name: batchName,
+      }
+    });
+    
+    if (!activeBatch) {
+      // Create it
+      const startDate = new Date(currentYear, isFirstHalf ? 0 : 6, 1);
+      const endDate = new Date(currentYear, isFirstHalf ? 5 : 11, isFirstHalf ? 30 : 31);
+      
+      activeBatch = this.batchRepository.create({
+        organizationId,
+        programId,
+        name: batchName,
+        degreeName: program.name || 'Program',
+        totalSemesters: 0,
+        courseMappings: {},
+        startDate,
+        endDate,
+        status: 'ACTIVE',
+        currentEnrolledCount: 0
       });
+      await this.batchRepository.save(activeBatch);
+    }
+    
+    const autoBatchId = activeBatch.id;
+
+    // 3. Create a SINGLE program enrollment
+    const programEnrollment = this.enrollmentRepository.create({
+      organizationId,
+      studentId,
+      courseId: undefined,
+      programId,
+      batchId: autoBatchId,
+      semesterId: undefined,
+      paymentStatus: 'NOT_APPLICABLE',
+      source: 'SELF_ENROLL',
+      paymentModel: 'PAY_PER_COURSE',
+      expectedGraduationDate,
+      paymentId: undefined,
+      expiresAt,
     });
 
-    await this.enrollmentRepository.save(enrollmentsToCreate);
+    await this.enrollmentRepository.save(programEnrollment);
 
-    // 4. Update enrolled count for each course
-    for (const course of courses) {
-      await this.courseRepository.update(
-        { id: course.id },
-        { enrolledCount: (course.enrolledCount || 0) + 1 }
-      );
+    // 4. Update enrolled count for program (if tracking on program level)
+    // Currently no enrolledCount on program, we could add it later if needed.
+
+    let enrollmentsCount = 1;
+
+    let totalAmountPaid = 0;
+
+    // 5. Create Course Enrollments for selected courses
+    if (selectedCourseIds && selectedCourseIds.length > 0) {
+      for (const courseId of selectedCourseIds) {
+        // verify course is in program
+        const c = courses.find(c => c.id === courseId);
+        if (c) {
+          let amount = 0;
+          let isPaid = false;
+
+          // 1. Check regional price
+          if (regionId && c.regionalPrices) {
+            let parsedPrices = c.regionalPrices;
+            if (typeof parsedPrices === 'string') {
+              try { parsedPrices = JSON.parse(parsedPrices); } catch (e) {}
+            }
+            if (Array.isArray(parsedPrices)) {
+              const rp = parsedPrices.find(
+                (p: any) =>
+                  p.regionId === regionId ||
+                  (p.regionId && p.regionId._id === regionId) ||
+                  (p.regionId && p.regionId.id === regionId),
+              );
+              if (rp && rp.price !== undefined && rp.price !== null) {
+                amount = parseFloat(rp.price) || 0;
+                isPaid = true;
+              }
+            }
+          }
+
+          // 2. Fallback to base price
+          if (!isPaid) {
+            const pricing = c.pricing;
+            if (pricing?.isPaid) {
+              isPaid = true;
+              amount = parseFloat(pricing.amount) || 0;
+            } else if ((c as any).price) {
+              isPaid = true;
+              amount = parseFloat((c as any).price) || 0;
+            }
+          }
+
+          let paymentRecord = null;
+          if (isPaid && amount > 0) {
+            const dummyPaymentId = `DUMMY-${uuidv4()}`;
+            const payment = this.paymentRepository.create({
+              organizationId,
+              studentId,
+              courseId: c.id,
+              amount,
+              dummyPaymentId,
+              status: 'COMPLETED',
+              isPaid: true,
+              paidAt: new Date(),
+              createdBy: studentId,
+            });
+            paymentRecord = await this.paymentRepository.save(payment);
+            totalAmountPaid += amount;
+          }
+
+          const courseEnrollment = this.enrollmentRepository.create({
+            organizationId,
+            studentId,
+            courseId: c.id,
+            programId,
+            batchId: autoBatchId,
+            semesterId: c.semesterId || undefined,
+            paymentStatus: (isPaid && amount > 0) ? 'PAID' : 'NOT_APPLICABLE',
+            source: 'SELF_ENROLL',
+            paymentModel: 'PAY_PER_COURSE',
+            expectedGraduationDate: undefined,
+            paymentId: paymentRecord ? paymentRecord.id : undefined,
+            expiresAt: undefined,
+          });
+          await this.enrollmentRepository.save(courseEnrollment);
+          
+          await this.courseRepository.update(
+            { id: c.id, organizationId },
+            { enrolledCount: (c.enrolledCount || 0) + 1 },
+          );
+          
+          enrollmentsCount++;
+        }
+      }
     }
 
     // 5. Notify student
@@ -281,17 +409,17 @@ export class EnrollmentService {
         organizationId,
         studentId,
         'Enrolled in Program',
-        `You have been successfully enrolled in the program! Access your semesters on your dashboard.`,
+        `You have been successfully enrolled in ${program.name || 'the program'}!`,
         'ENROLLMENT',
-        `/student/dashboard`,
+        `/student/programs/${programId}`,
       );
     } catch (e) {}
 
     return {
       success: true,
-      dummyPaymentId: paymentRecord ? paymentRecord.dummyPaymentId : null,
-      amount: paymentRecord ? paymentRecord.amount : null,
-      enrollmentsCount: enrollmentsToCreate.length,
+      dummyPaymentId: null,
+      amount: totalAmountPaid,
+      enrollmentsCount,
     };
   }
 
@@ -359,12 +487,18 @@ export class EnrollmentService {
   }
 
   async getEnrollments(organizationId: string, queryDto: any) {
-    const { page = 1, limit = 10, search } = queryDto;
+    const { page = 1, limit = 10, search, batchId } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.enrollmentRepository
       .createQueryBuilder('enrollment')
+      .leftJoinAndSelect('enrollment.student', 'student')
+      .leftJoinAndSelect('enrollment.batch', 'batch')
       .where('enrollment.organizationId = :organizationId', { organizationId });
+
+    if (batchId) {
+      queryBuilder.andWhere('enrollment.batchId = :batchId', { batchId });
+    }
 
     if (search) {
       queryBuilder.andWhere(
@@ -533,6 +667,7 @@ export class EnrollmentService {
       .andWhere('enrollment.organizationId = :organizationId', {
         organizationId,
       })
+      .andWhere('enrollment.courseId IS NOT NULL')
       .select([
         'enrollment.*',
         'course.id as course_id',
@@ -618,6 +753,70 @@ export class EnrollmentService {
     });
   }
 
+  async getStudentPrograms(studentId: string, organizationId: string) {
+    const enrollments = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .leftJoin(Program, 'program', 'program.id = enrollment.programId')
+      .where('enrollment.studentId = :studentId', { studentId })
+      .andWhere('enrollment.organizationId = :organizationId', { organizationId })
+      .andWhere('enrollment.courseId IS NULL')
+      .select([
+        'enrollment.*',
+        'program.id as program_id',
+        'program.name as program_name',
+        'program.description as program_description',
+        'program.totalSubjects as program_totalSubjects',
+        'program.maxDurationYears as program_maxDurationYears',
+        'program.degreeTitle as program_degreeTitle',
+      ])
+      .orderBy('enrollment.createdAt', 'DESC')
+      .getRawMany();
+
+    const mappedEnrollments = enrollments.map((e) => ({
+      ...e,
+      program: {
+        id: e.program_id,
+        name: e.program_name,
+        description: e.program_description,
+        totalSubjects: e.program_totalSubjects,
+        maxDurationYears: e.program_maxDurationYears,
+        degreeTitle: e.program_degreeTitle,
+      },
+    }));
+
+    // Find completed courses for these programs
+    const programIds = mappedEnrollments.map(e => e.programId).filter(Boolean);
+    if (programIds.length === 0) return mappedEnrollments;
+
+    // We count how many course enrollments have status = 'COMPLETED' for this student/program
+    const completedCourses = await this.enrollmentRepository
+      .createQueryBuilder('enrollment')
+      .where('enrollment.studentId = :studentId', { studentId })
+      .andWhere('enrollment.organizationId = :organizationId', { organizationId })
+      .andWhere('enrollment.courseId IS NOT NULL')
+      .andWhere('enrollment.programId IN (:...programIds)', { programIds })
+      .andWhere('enrollment.status = :status', { status: 'COMPLETED' })
+      .select('enrollment.programId', 'programId')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('enrollment.programId')
+      .getRawMany();
+
+    const completedMap: Record<string, number> = {};
+    for (const row of completedCourses) {
+      completedMap[row.programId] = parseInt(row.count, 10);
+    }
+
+    return mappedEnrollments.map((e) => {
+      const completed = completedMap[e.programId] || 0;
+      const total = e.program.totalSubjects || 30;
+      return {
+        ...e,
+        completedCourses: completed,
+        progressPercentage: total === 0 ? 0 : Math.round((completed / total) * 100),
+      };
+    });
+  }
+
   async verifyActiveEnrollment(
     organizationId: string,
     studentId: string,
@@ -646,5 +845,41 @@ export class EnrollmentService {
     }
 
     return enrollment;
+  }
+
+  private async determineBatchForRegion(organizationId: string, programId: string, regionId: string) {
+    // 1. Fetch Region Config for this program/region
+    const config = await this.regionConfigRepository.findOne({
+      where: { organizationId, programId, regionName: regionId }
+    });
+
+    // If no config or rolling admissions (no fixed batches), return null batch
+    if (!config || !config.hasFixedBatches) {
+      return null;
+    }
+
+    // 2. Determine current date and find matching date range
+    const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+    const currentYear = new Date().getFullYear();
+    
+    // Check if there is an active RegionCohort for this config and year (Simplified lookup)
+    let activeCohort = await this.regionCohortRepository.findOne({
+      where: { organizationId, regionConfigId: config.id } // Ideally filter by active date range
+    });
+
+    // 3. Dynamic Batch Creation (First Person Rule)
+    if (!activeCohort) {
+      const cohortName = `${currentMonth} ${currentYear} Batch`;
+      const newCohort = this.regionCohortRepository.create({
+        organizationId,
+        name: cohortName,
+        regionConfigId: config.id,
+        startDate: new Date(),
+        // Deadline calculation would go here based on config.customDurationYears or program default
+      });
+      activeCohort = await this.regionCohortRepository.save(newCohort);
+    }
+
+    return activeCohort.id;
   }
 }

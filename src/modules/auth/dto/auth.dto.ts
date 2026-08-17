@@ -74,4 +74,7 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   regionId?: string;
+
+  @IsOptional()
+  customProfile?: Record<string, any>;
 }

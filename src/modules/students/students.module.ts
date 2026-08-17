@@ -19,10 +19,13 @@ import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
+import { StudentProfile } from './entities/student-profile.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       User, 
+      StudentProfile,
       Enrollment, 
       Course, 
       Exam, 
