@@ -157,6 +157,8 @@ export class ReportsService {
       .getMany();
 
     let totalRevenue = 0;
+    let revenueByCurrency: Record<string, number> = {};
+
     for (const org of orgsWithPlans) {
       let config = org.subscriptionConfig as any;
       if (typeof config === 'string') {
@@ -165,7 +167,14 @@ export class ReportsService {
         } catch (e) {}
       }
       if (config && config.price !== undefined) {
-        totalRevenue += parseFloat(config.price) || 0;
+        const price = parseFloat(config.price) || 0;
+        const currency = config.currency || 'USD';
+        
+        totalRevenue += price;
+        if (!revenueByCurrency[currency]) {
+          revenueByCurrency[currency] = 0;
+        }
+        revenueByCurrency[currency] += price;
       }
     }
 
@@ -176,6 +185,7 @@ export class ReportsService {
       totalFaculty,
       totalCourses,
       totalRevenue,
+      revenueByCurrency,
     };
   }
 
