@@ -66,7 +66,7 @@ export class Organization {
   receiptUrl: string;
   */
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   subscriptionExpiresAt: Date;
 
   @Column({ default: false })
