@@ -35,7 +35,9 @@ export class ManualGradesService {
   async getGradesForCourse(organizationId: string, batchId: string, semesterId: string | null, courseId: string) {
     // 1. Get enrollments for this course AND batch
     const whereEnrollment: any = { organizationId, courseId, status: In(['ACTIVE', 'COMPLETED']) };
-    if (batchId && batchId !== 'all') {
+    if (batchId === 'none') {
+      whereEnrollment.batchId = IsNull();
+    } else if (batchId && batchId !== 'all') {
       whereEnrollment.batchId = batchId;
     }
 
