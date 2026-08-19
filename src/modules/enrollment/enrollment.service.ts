@@ -61,6 +61,7 @@ export class EnrollmentService {
 
     let isPaid = false;
     let amount = 0;
+    let currency = 'USD';
 
     // 1. Check regional price first
     if (regionId && course.regionalPrices) {
@@ -80,6 +81,7 @@ export class EnrollmentService {
         );
         if (rp && rp.price !== undefined && rp.price !== null) {
           amount = parseFloat(rp.price) || 0;
+          currency = rp.currency || 'USD';
           isPaid = true;
         }
       }
@@ -91,6 +93,7 @@ export class EnrollmentService {
       if (pricing?.isPaid) {
         isPaid = true;
         amount = parseFloat(pricing.amount) || 0;
+        currency = pricing.currency || 'USD';
       } else if ((course as any).price) {
         isPaid = true;
         amount = parseFloat((course as any).price) || 0;
@@ -107,6 +110,7 @@ export class EnrollmentService {
         studentId,
         courseId,
         amount,
+        currency,
         dummyPaymentId,
         status: 'COMPLETED',
         isPaid: true,
@@ -394,6 +398,7 @@ export class EnrollmentService {
         const c = courses.find(c => c.id === courseId);
         if (c) {
           let amount = 0;
+          let currency = 'USD';
           let isPaid = false;
 
           // 1. Check regional price
@@ -411,6 +416,7 @@ export class EnrollmentService {
               );
               if (rp && rp.price !== undefined && rp.price !== null) {
                 amount = parseFloat(rp.price) || 0;
+                currency = rp.currency || 'USD';
                 isPaid = true;
               }
             }
@@ -436,6 +442,7 @@ export class EnrollmentService {
               studentId,
               courseId: c.id,
               amount,
+              currency,
               dummyPaymentId,
               status: 'COMPLETED',
               isPaid: true,
