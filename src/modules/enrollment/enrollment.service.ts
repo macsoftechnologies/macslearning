@@ -563,7 +563,6 @@ export class EnrollmentService {
       .createQueryBuilder('enrollment')
       .leftJoinAndSelect('enrollment.student', 'student')
       .leftJoinAndSelect('enrollment.batch', 'batch')
-      .leftJoinAndSelect('enrollment.program', 'program')
       .where('enrollment.organizationId = :organizationId', { organizationId });
 
     if (batchId) {
@@ -587,8 +586,17 @@ export class EnrollmentService {
       return createPaginatedResponse(data, totalItems, page, limit);
     }
 
-    const courseIds = [...new Set(data.map((e: any) => e.courseId))];
-    const studentIds = [...new Set(data.map((e: any) => e.studentId))];
+    const courseIds = [...new Set(data.map((e: any) => e.courseId).filter(Boolean))];
+    const studentIds = [...new Set(data.map((e: any) => e.studentId).filter(Boolean))];
+    const programIds = [...new Set(data.map((e: any) => e.programId).filter(Boolean))];
+
+    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program')
+      .where('program.id IN (:...programIds)', { programIds })
+      .andWhere('program.organizationId = :organizationId', { organizationId })
+      .getMany() : [];
+
+    const programsMap: Record<string, any> = {};
+    programs.forEach(p => programsMap[p.id] = p);
 
     const lessonsQuery = this.lessonRepository
       .createQueryBuilder('lesson')
@@ -637,6 +645,7 @@ export class EnrollmentService {
       const completed = completedMap[`${cId}_${sId}`] || 0;
       return {
         ...e,
+        program: programsMap[e.programId] || null,
         progressPercentage:
           total === 0 ? 0 : Math.round((completed / total) * 100),
       };
