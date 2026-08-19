@@ -1,7 +1,5 @@
 import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class VimeoService {
@@ -78,18 +76,18 @@ export class VimeoService {
     try {
       // 1. Get or create org folder
       const folderUri = await this.getOrCreateFolder(orgName);
-      const projectId = folderUri.split('/').pop();
 
-      // 2. Create the video in the specific folder and get the tus upload link
+      // 2. Create the video and get the tus upload link
       const res = await this.vimeoRequest({
         method: 'POST',
-        path: `/me/projects/${projectId}/videos`,
+        path: '/me/videos',
         query: {
           upload: {
             approach: 'tus',
             size: fileSize
           },
           name: videoName,
+          folder_uri: folderUri,
           privacy: { view: 'unlisted', embed: 'public' }
         }
       });
