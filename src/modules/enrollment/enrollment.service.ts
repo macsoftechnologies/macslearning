@@ -638,14 +638,42 @@ export class EnrollmentService {
       completedMap[key] = (completedMap[key] || 0) + 1;
     }
 
+    const programEnrollments = data.filter((e: any) => e.programId && !e.courseId);
+    const completedCoursesMap: Record<string, number> = {};
+    if (programEnrollments.length > 0 && studentIds.length > 0) {
+      const counts = await this.enrollmentRepository.createQueryBuilder('e')
+        .select(['e.studentId AS studentId', 'e.programId AS programId'])
+        .addSelect('COUNT(e.id)', 'count')
+        .where('e.organizationId = :organizationId', { organizationId })
+        .andWhere('e.courseId IS NOT NULL')
+        .andWhere('e.status = :status', { status: 'COMPLETED' })
+        .andWhere('e.studentId IN (:...studentIds)', { studentIds })
+        .groupBy('e.studentId')
+        .addGroupBy('e.programId')
+        .getRawMany();
+      
+      counts.forEach(row => {
+        completedCoursesMap[`${row.studentId}_${row.programId}`] = parseInt(row.count, 10);
+      });
+    }
+
     const enrichedData = data.map((e: any) => {
       const cId = e.courseId || '';
       const sId = e.studentId || '';
       const total = totalLessonsMap[cId] || 0;
       const completed = completedMap[`${cId}_${sId}`] || 0;
+      
+      let programProgress = undefined;
+      if (e.programId && !e.courseId) {
+         const compCourses = completedCoursesMap[`${sId}_${e.programId}`] || 0;
+         const totSubjects = programsMap[e.programId]?.totalSubjects || 30;
+         programProgress = `${compCourses} / ${totSubjects}`;
+      }
+
       return {
         ...e,
         program: programsMap[e.programId] || null,
+        programProgress,
         progressPercentage:
           total === 0 ? 0 : Math.round((completed / total) * 100),
       };
