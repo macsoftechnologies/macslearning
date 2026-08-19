@@ -563,6 +563,7 @@ export class EnrollmentService {
       .createQueryBuilder('enrollment')
       .leftJoinAndSelect('enrollment.student', 'student')
       .leftJoinAndSelect('enrollment.batch', 'batch')
+      .leftJoinAndSelect('enrollment.program', 'program')
       .where('enrollment.organizationId = :organizationId', { organizationId });
 
     if (batchId) {
