@@ -119,6 +119,7 @@ export class StudentsService {
            const totalSubjects = programsMap[programEnrollment.programId] || 30;
            (s as any).programProgress = `${completedCourses} / ${totalSubjects}`;
            (s as any).enrolledCoursesCount = completedCourses; // fallback
+           (s as any).expectedGraduationDate = programEnrollment.expectedGraduationDate;
         } else {
            const enrolledCourses = sEnrollments.filter(e => e.courseId).length;
            (s as any).programProgress = `${enrolledCourses} Courses`;
