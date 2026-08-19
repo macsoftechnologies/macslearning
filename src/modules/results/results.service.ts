@@ -56,6 +56,7 @@ export class ResultsService {
         'exam.id as exam_id',
         'exam.title as exam_title',
         'course.id as course_id',
+        'course.title as course_title',
       ])
       .orderBy('attempt.createdAt', 'DESC')
       .getRawMany();
@@ -66,7 +67,10 @@ export class ResultsService {
         _id: a.exam_id,
         id: a.exam_id,
         title: a.exam_title,
-        courseId: a.course_id,
+        courseId: {
+          id: a.course_id,
+          title: a.course_title,
+        },
       },
     }));
   }
@@ -76,6 +80,7 @@ export class ResultsService {
       .createQueryBuilder('answer')
       .leftJoin(VideoQuiz, 'quiz', 'quiz.id = answer.quizId')
       .leftJoin(Lesson, 'lesson', 'lesson.id = answer.lessonId')
+      .leftJoin(Course, 'course', 'course.id = lesson.courseId')
       .where('answer.organizationId = :organizationId', { organizationId })
       .andWhere('answer.studentId = :studentId', { studentId })
       .select([
@@ -86,6 +91,8 @@ export class ResultsService {
         'quiz.maxMarks as quiz_maxMarks',
         'lesson.id as lesson_id',
         'lesson.title as lesson_title',
+        'course.id as course_id',
+        'course.title as course_title',
       ])
       .orderBy('answer.createdAt', 'DESC')
       .getRawMany();
@@ -99,7 +106,15 @@ export class ResultsService {
         type: a.quiz_type,
         maxMarks: a.quiz_maxMarks,
       },
-      lessonId: { _id: a.lesson_id, id: a.lesson_id, title: a.lesson_title },
+      lessonId: {
+        _id: a.lesson_id,
+        id: a.lesson_id,
+        title: a.lesson_title,
+        courseId: {
+          id: a.course_id,
+          title: a.course_title,
+        },
+      },
     }));
   }
 

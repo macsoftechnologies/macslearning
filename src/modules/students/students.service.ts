@@ -494,7 +494,10 @@ export class StudentsService {
           progressPercentage: progPct,
           course: courses.find((c: any) => c.id === e.courseId),
           courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
-          program: programs.find(p => p.id === e.programId) || null,
+          program: programs.find(p => p.id === e.programId) ? {
+            ...programs.find(p => p.id === e.programId),
+            expectedGraduationDate: enrollments.find(pe => pe.programId === e.programId && !pe.courseId)?.expectedGraduationDate || null
+          } : null,
           batch: batches.find(b => b.id === e.batchId) || null,
           semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
           grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId) || !g.semesterId)) || null,
