@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, Not, IsNull } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { Exam } from './entities/exam.entity';
@@ -421,9 +421,35 @@ export class ExamsService {
     // If passed, mark the course enrollment as COMPLETED
     if (isPassed) {
       await this.enrollmentRepository.update(
-        { studentId, courseId: exam.courseId, organizationId, status: 'ACTIVE' },
+        { studentId, courseId: exam.courseId, organizationId, status: In(['ACTIVE', 'COMPLETED']) },
         { status: 'COMPLETED' }
       );
+
+      // Program Auto-completion logic
+      try {
+        const cEnrollment = await this.enrollmentRepository.findOne({
+          where: { studentId, courseId: exam.courseId, organizationId }
+        });
+        if (cEnrollment && cEnrollment.programId) {
+          const programRows = await this.enrollmentRepository.manager.query(
+            `SELECT totalSubjects FROM programs WHERE id = ?`, [cEnrollment.programId]
+          );
+          if (programRows && programRows.length > 0) {
+             const totalSubjects = programRows[0].totalSubjects;
+             const completedCount = await this.enrollmentRepository.count({
+               where: { studentId, programId: cEnrollment.programId, organizationId, status: 'COMPLETED', courseId: Not(IsNull()) }
+             });
+             if (completedCount >= totalSubjects) {
+               await this.enrollmentRepository.update(
+                 { studentId, programId: cEnrollment.programId, organizationId, courseId: IsNull(), status: In(['ACTIVE', 'COMPLETED']) },
+                 { status: 'COMPLETED' }
+               );
+             }
+          }
+        }
+      } catch (e) {
+        console.error('Error auto-completing program:', e);
+      }
     }
 
     // Notify the course faculty
@@ -694,9 +720,35 @@ export class ExamsService {
     // If passed, mark the course enrollment as COMPLETED
     if (isPassed) {
       await this.enrollmentRepository.update(
-        { studentId: attempt.studentId, courseId: exam.courseId, organizationId, status: 'ACTIVE' },
+        { studentId: attempt.studentId, courseId: exam.courseId, organizationId, status: In(['ACTIVE', 'COMPLETED']) },
         { status: 'COMPLETED' }
       );
+
+      // Program Auto-completion logic
+      try {
+        const cEnrollment = await this.enrollmentRepository.findOne({
+          where: { studentId: attempt.studentId, courseId: exam.courseId, organizationId }
+        });
+        if (cEnrollment && cEnrollment.programId) {
+          const programRows = await this.enrollmentRepository.manager.query(
+            `SELECT totalSubjects FROM programs WHERE id = ?`, [cEnrollment.programId]
+          );
+          if (programRows && programRows.length > 0) {
+             const totalSubjects = programRows[0].totalSubjects;
+             const completedCount = await this.enrollmentRepository.count({
+               where: { studentId: attempt.studentId, programId: cEnrollment.programId, organizationId, status: 'COMPLETED', courseId: Not(IsNull()) }
+             });
+             if (completedCount >= totalSubjects) {
+               await this.enrollmentRepository.update(
+                 { studentId: attempt.studentId, programId: cEnrollment.programId, organizationId, courseId: IsNull(), status: In(['ACTIVE', 'COMPLETED']) },
+                 { status: 'COMPLETED' }
+               );
+             }
+          }
+        }
+      } catch (e) {
+        console.error('Error auto-completing program:', e);
+      }
     }
 
     // Notify student that their short-answer has been graded

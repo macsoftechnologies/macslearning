@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Course } from '../courses/entities/course.entity';
 import { Enrollment } from '../enrollment/entities/enrollment.entity';
 import { Assignment } from '../assignments/entities/assignment.entity';
@@ -61,7 +61,7 @@ export class FacultyService {
       .createQueryBuilder('enrollment')
       .where('enrollment.organizationId = :organizationId', { organizationId })
       .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-      .andWhere('enrollment.status = :status', { status: 'ACTIVE' })
+      .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
       .select('COUNT(DISTINCT enrollment.studentId)', 'count')
       .getRawOne();
     const totalStudents = parseInt(uniqueStudentsResult?.count || '0', 10);
@@ -70,7 +70,7 @@ export class FacultyService {
       .createQueryBuilder('enrollment')
       .where('enrollment.organizationId = :organizationId', { organizationId })
       .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-      .andWhere('enrollment.status = :status', { status: 'ACTIVE' })
+      .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
       .select('enrollment.courseId', 'courseId')
       .addSelect('COUNT(*)', 'count')
       .groupBy('enrollment.courseId')
@@ -303,7 +303,7 @@ export class FacultyService {
         .leftJoin(User, 'student', 'student.id = enrollment.studentId')
         .where('enrollment.organizationId = :organizationId', { organizationId })
         .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-        .andWhere('enrollment.status = :status', { status: 'ACTIVE' })
+        .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
         .select([
           'enrollment.courseId as courseId',
           'enrollment.createdAt as enrolledAt',

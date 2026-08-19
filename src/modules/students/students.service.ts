@@ -91,25 +91,39 @@ export class StudentsService {
     if (data.length > 0) {
       const studentIds = data.map((s) => s.id);
 
-      const enrollments = await this.enrollmentRepository
+      const enrollmentsData = await this.enrollmentRepository
         .createQueryBuilder('enrollment')
-        .where('enrollment.organizationId = :organizationId', {
-          organizationId,
-        })
+        .where('enrollment.organizationId = :organizationId', { organizationId })
         .andWhere('enrollment.studentId IN (:...studentIds)', { studentIds })
-        .andWhere('enrollment.status = :status', { status: 'ACTIVE' })
-        .select('enrollment.studentId', 'studentId')
-        .addSelect('COUNT(*)', 'count')
-        .groupBy('enrollment.studentId')
-        .getRawMany();
+        .andWhere('enrollment.status IN (:...status)', { status: ['ACTIVE', 'COMPLETED'] })
+        .getMany();
 
-      const countsMap: Record<string, number> = {};
-      enrollments.forEach(
-        (e) => (countsMap[e.studentId] = parseInt(e.count, 10)),
-      );
+      const programIds = [...new Set(enrollmentsData.map(e => e.programId).filter(Boolean))];
+      let programsMap: Record<string, number> = {};
+      if (programIds.length > 0) {
+         const programRows = await this.enrollmentRepository.manager
+            .createQueryBuilder()
+            .select(['p.id AS id', 'p.totalSubjects AS totalSubjects'])
+            .from('programs', 'p')
+            .where('p.id IN (:...programIds)', { programIds })
+            .getRawMany();
+         programRows.forEach(p => programsMap[p.id] = p.totalSubjects);
+      }
 
       data.forEach((s) => {
-        (s as any).enrolledCoursesCount = countsMap[s.id] || 0;
+        const sEnrollments = enrollmentsData.filter(e => e.studentId === s.id);
+        const programEnrollment = sEnrollments.find(e => e.programId && !e.courseId);
+        
+        if (programEnrollment) {
+           const completedCourses = sEnrollments.filter(e => e.programId === programEnrollment.programId && e.courseId && e.status === 'COMPLETED').length;
+           const totalSubjects = programsMap[programEnrollment.programId] || 30;
+           (s as any).programProgress = `${completedCourses} / ${totalSubjects}`;
+           (s as any).enrolledCoursesCount = completedCourses; // fallback
+        } else {
+           const enrolledCourses = sEnrollments.filter(e => e.courseId).length;
+           (s as any).programProgress = `${enrolledCourses} Courses`;
+           (s as any).enrolledCoursesCount = enrolledCourses;
+        }
       });
     }
 
