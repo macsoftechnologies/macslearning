@@ -32,7 +32,10 @@ export class VimeoService {
     return new Promise((resolve, reject) => {
       if (!this.vimeoClient) return reject(new Error('Vimeo client not initialized'));
       this.vimeoClient.request(options, (error: any, body: any, statusCode: any, headers: any) => {
-        if (error) return reject(error);
+        if (error) {
+          this.logger.error('Vimeo API Failure: Status ' + statusCode + ' Headers: ' + JSON.stringify(headers));
+          return reject(new Error('Vimeo HTTP ' + statusCode + ': ' + error.message));
+        }
         if (statusCode >= 400) {
           this.logger.error('Vimeo API Error: Status ' + statusCode, JSON.stringify(body));
           return reject(new Error('Vimeo API Error ' + statusCode + ': ' + JSON.stringify(body)));
@@ -84,7 +87,7 @@ export class VimeoService {
         query: {
           upload: {
             approach: 'tus',
-            size: fileSize
+            size: String(fileSize)
           },
           name: videoName,
           folder_uri: folderUri,
@@ -92,7 +95,8 @@ export class VimeoService {
         }
       });
 
-      const uploadLink = res.body.upload.upload_link;
+      this.logger.log('Vimeo Response Body: ' + JSON.stringify(res.body));
+      const uploadLink = res.body.upload?.upload_link;
       const link = res.body.link; // e.g. https://vimeo.com/123456789
       const vimeoId = res.body.uri.replace('/videos/', '');
 
