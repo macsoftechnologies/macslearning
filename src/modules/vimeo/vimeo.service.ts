@@ -35,6 +35,10 @@ export class VimeoService {
       if (!this.vimeoClient) return reject(new Error('Vimeo client not initialized'));
       this.vimeoClient.request(options, (error: any, body: any, statusCode: any, headers: any) => {
         if (error) return reject(error);
+        if (statusCode >= 400) {
+          this.logger.error('Vimeo API Error: Status ' + statusCode, JSON.stringify(body));
+          return reject(new Error('Vimeo API Error ' + statusCode + ': ' + JSON.stringify(body)));
+        }
         resolve({ body, statusCode, headers });
       });
     });
