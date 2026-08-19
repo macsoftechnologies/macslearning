@@ -376,7 +376,7 @@ export class ExamsService {
         textAnswer: answer.textAnswer,
         isCorrect,
         marks: answerMarks,
-        isGraded: isCorrect ? true : answer.isGraded,
+        isGraded: (question.type === 'MCQ' || question.type === 'TRUE_FALSE') ? true : (isCorrect ? true : answer.isGraded),
       };
     });
 

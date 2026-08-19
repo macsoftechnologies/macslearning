@@ -70,11 +70,11 @@ export class EnrollmentController {
   @Roles('ORG_USER')
   async getEnrollments(
     @Request() req: any,
-    @Query() query: PaginationQueryDto,
+    @Query() query: PaginationQueryDto, @Query('batchId') batchId?: string,
   ) {
     return this.enrollmentService.getEnrollments(
       req.user.organizationId,
-      query,
+      { ...query, batchId },
     );
   }
 

@@ -242,56 +242,112 @@ export class EnrollmentService {
       expectedGraduationDate = gradDate;
     }
 
-    // Auto-Batch Generation Logic
-    const currentMonth = new Date().getMonth(); // 0-11
-    const currentYear = new Date().getFullYear();
-    const isFirstHalf = currentMonth < 6;
-    
-    // Attempt to get region name for the batch name
+    // Region Cohort Rules Logic
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth(); // 0-11
+    const currentYear = currentDate.getFullYear();
+    const currentDay = currentDate.getDate();
+
+    let regionNameRaw = '';
     let regionNameStr = '';
     if (regionId) {
       try {
         const regionObj = await this.batchRepository.manager.query(`SELECT name FROM regions WHERE id = ?`, [regionId]);
         if (regionObj && regionObj.length > 0) {
-          regionNameStr = ` - ${regionObj[0].name}`;
+          regionNameRaw = regionObj[0].name;
+          regionNameStr = ` - ${regionNameRaw}`;
         }
       } catch (err) {}
     }
 
-    const batchName = isFirstHalf 
-      ? `Jan-Jun ${currentYear}${regionNameStr}` 
-      : `Jul-Dec ${currentYear}${regionNameStr}`;
-      
-    // Check if this auto-batch exists
-    let activeBatch = await this.batchRepository.findOne({
-      where: {
-        organizationId,
-        programId,
-        name: batchName,
-      }
-    });
-    
-    if (!activeBatch) {
-      // Create it
-      const startDate = new Date(currentYear, isFirstHalf ? 0 : 6, 1);
-      const endDate = new Date(currentYear, isFirstHalf ? 5 : 11, isFirstHalf ? 30 : 31);
-      
-      activeBatch = this.batchRepository.create({
-        organizationId,
-        programId,
-        name: batchName,
-        degreeName: program.name || 'Program',
-        totalSemesters: 0,
-        courseMappings: {},
-        startDate,
-        endDate,
-        status: 'ACTIVE',
-        currentEnrolledCount: 0
-      });
-      await this.batchRepository.save(activeBatch);
+    let autoBatchId: string | undefined = undefined;
+
+    const regionConfigs = await this.batchRepository.manager.query(
+      `SELECT * FROM region_configs WHERE programId = ? AND regionName = ?`,
+      [programId, regionNameRaw]
+    );
+
+    const config = regionConfigs.length > 0 ? regionConfigs[0] : null;
+
+    if (config && config.customDurationYears) {
+      const gradDate = new Date();
+      gradDate.setFullYear(gradDate.getFullYear() + config.customDurationYears);
+      expectedGraduationDate = gradDate;
     }
-    
-    const autoBatchId = activeBatch.id;
+
+    if (!config || !config.hasFixedBatches) {
+      // Rolling Admissions: No batch generated.
+      autoBatchId = undefined;
+    } else {
+      // Fixed Batches: Use the configured batchDateRanges
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      let batchRanges = [];
+      try {
+        if (typeof config.batchDateRanges === 'string') {
+           batchRanges = JSON.parse(config.batchDateRanges);
+        } else {
+           batchRanges = config.batchDateRanges || [];
+        }
+      } catch(e) {}
+
+      let targetRange = null;
+
+      for (const range of batchRanges) {
+        const startMonthIdx = monthNames.indexOf(range.startMonth);
+        const endMonthIdx = monthNames.indexOf(range.endMonth);
+        const startDateInt = parseInt(range.startDate || '1');
+        const endDateInt = parseInt(range.endDate || '31');
+        
+        let fallsIn = false;
+        
+        if (startMonthIdx <= endMonthIdx) {
+           if (currentMonth > startMonthIdx && currentMonth < endMonthIdx) {
+              fallsIn = true;
+           } else if (currentMonth === startMonthIdx && currentMonth === endMonthIdx) {
+              if (currentDay >= startDateInt && currentDay <= endDateInt) fallsIn = true;
+           } else if (currentMonth === startMonthIdx) {
+              if (currentDay >= startDateInt) fallsIn = true;
+           } else if (currentMonth === endMonthIdx) {
+              if (currentDay <= endDateInt) fallsIn = true;
+           }
+        }
+        
+        if (fallsIn) {
+          targetRange = { ...range, startMonthIdx, endMonthIdx, startDateInt, endDateInt };
+          break;
+        }
+      }
+
+      if (!targetRange && batchRanges.length > 0) {
+        const r = batchRanges[0];
+        targetRange = { ...r, startMonthIdx: monthNames.indexOf(r.startMonth), endMonthIdx: monthNames.indexOf(r.endMonth), startDateInt: parseInt(r.startDate || '1'), endDateInt: parseInt(r.endDate || '31') };
+      }
+
+      if (targetRange) {
+        const startShort = targetRange.startMonth.substring(0,3);
+        const endShort = targetRange.endMonth.substring(0,3);
+        const batchName = `${startShort}-${endShort} ${currentYear}${regionNameStr}`;
+        
+        let activeBatch = await this.batchRepository.findOne({
+          where: { organizationId, programId, name: batchName }
+        });
+        
+        if (!activeBatch) {
+          const startDateObj = new Date(currentYear, targetRange.startMonthIdx, targetRange.startDateInt);
+          const endDateObj = new Date(currentYear, targetRange.endMonthIdx, targetRange.endDateInt);
+          
+          activeBatch = this.batchRepository.create({
+            organizationId, programId, name: batchName,
+            degreeName: program.name || 'Program',
+            totalSemesters: 0, courseMappings: {},
+            startDate: startDateObj, endDate: endDateObj,
+            status: 'ACTIVE', currentEnrolledCount: 0
+          });
+          await this.batchRepository.save(activeBatch);
+        }
+        autoBatchId = activeBatch.id;
+      }
+    }
 
     // 3. Create a SINGLE program enrollment
     const programEnrollment = this.enrollmentRepository.create({
