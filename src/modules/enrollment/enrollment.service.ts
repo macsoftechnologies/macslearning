@@ -827,7 +827,7 @@ export class EnrollmentService {
         organizationId,
         studentId,
         courseId,
-        status: 'ACTIVE',
+        status: In(['ACTIVE', 'COMPLETED']),
       },
     });
     if (!enrollment) {
