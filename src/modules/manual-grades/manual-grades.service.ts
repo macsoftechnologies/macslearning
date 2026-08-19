@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, In } from 'typeorm';
 import { OfflineGrade } from './entities/offline-grade.entity';
 import { Enrollment } from '../enrollment/entities/enrollment.entity';
 import { User } from '../users/entities/user.entity';
@@ -34,7 +34,7 @@ export class ManualGradesService {
 
   async getGradesForCourse(organizationId: string, batchId: string, semesterId: string | null, courseId: string) {
     // 1. Get enrollments for this course AND batch
-    const whereEnrollment: any = { organizationId, courseId, status: 'ACTIVE' };
+    const whereEnrollment: any = { organizationId, courseId, status: In(['ACTIVE', 'COMPLETED']) };
     if (batchId && batchId !== 'all') {
       whereEnrollment.batchId = batchId;
     }
