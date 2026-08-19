@@ -239,6 +239,7 @@ export class EnrollmentService {
     if (program.maxDurationYears && program.maxDurationYears > 0) {
       const gradDate = new Date();
       gradDate.setFullYear(gradDate.getFullYear() + program.maxDurationYears);
+      gradDate.setDate(gradDate.getDate() - 1);
       expectedGraduationDate = gradDate;
     }
 
@@ -272,6 +273,7 @@ export class EnrollmentService {
     if (config && config.customDurationYears) {
       const gradDate = new Date();
       gradDate.setFullYear(gradDate.getFullYear() + config.customDurationYears);
+      gradDate.setDate(gradDate.getDate() - 1);
       expectedGraduationDate = gradDate;
     }
 
@@ -334,18 +336,29 @@ export class EnrollmentService {
         
         if (!activeBatch) {
           const startDateObj = new Date(currentYear, targetRange.startMonthIdx, targetRange.startDateInt);
-          const endDateObj = new Date(currentYear, targetRange.endMonthIdx, targetRange.endDateInt);
+          
+          let durationYears = program.maxDurationYears || 0;
+          if (config && config.customDurationYears) {
+             durationYears = config.customDurationYears;
+          }
+          
+          const batchEndDateObj = new Date(startDateObj);
+          batchEndDateObj.setFullYear(batchEndDateObj.getFullYear() + durationYears);
+          batchEndDateObj.setDate(batchEndDateObj.getDate() - 1);
           
           activeBatch = this.batchRepository.create({
             organizationId, programId, name: batchName,
             degreeName: program.name || 'Program',
             totalSemesters: 0, courseMappings: {},
-            startDate: startDateObj, endDate: endDateObj,
+            startDate: startDateObj, endDate: batchEndDateObj,
             status: 'ACTIVE', currentEnrolledCount: 0
           });
           await this.batchRepository.save(activeBatch);
         }
         autoBatchId = activeBatch.id;
+        
+        // Sync the student's graduation date directly with the batch's end date
+        expectedGraduationDate = activeBatch.endDate;
       }
     }
 
