@@ -67,7 +67,7 @@ export class ExamsService {
     if (!exam) throw new NotFoundException('Exam not found');
 
     const questions = await this.questionRepository.find({
-      where: { examId, organizationId },
+      where: { examId, organizationId, isDeleted: false },
     });
 
     const totalQuestionMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
