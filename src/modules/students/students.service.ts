@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
 import { User } from '../users/entities/user.entity';
@@ -345,7 +345,7 @@ export class StudentsService {
 
     // 2. Fetch Enrollments
     const enrollments = await this.enrollmentRepository.find({
-      where: { studentId, organizationId, status: 'ACTIVE' }
+      where: { studentId, organizationId, status: In(['ACTIVE', 'COMPLETED']) }
     });
 
     let courseIds = enrollments.map(e => e.courseId);
