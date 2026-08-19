@@ -142,7 +142,11 @@ export class ManualGradesService {
 
       const whereClause: any = { studentId, courseId };
       if (organizationId) whereClause.organizationId = organizationId;
-      if (academicBatchId) whereClause.academicBatchId = academicBatchId;
+      if (academicBatchId && academicBatchId !== 'none') {
+        whereClause.academicBatchId = academicBatchId;
+      } else if (academicBatchId === 'none') {
+        whereClause.academicBatchId = IsNull();
+      }
       if (semesterId) {
         whereClause.semesterId = semesterId;
       } else {
