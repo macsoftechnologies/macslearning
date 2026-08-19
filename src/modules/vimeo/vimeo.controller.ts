@@ -21,6 +21,6 @@ export class VimeoController {
   ) {
     const orgName = req.user.organizationId; // Using org ID as folder name
     const ticket = await this.vimeoService.generateUploadTicket(body.fileSize, body.videoName, orgName);
-    return { data: ticket };
+    return ticket;
   }
 }
