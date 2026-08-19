@@ -10,6 +10,7 @@ import { LessonCheckpointController } from '../content/lesson-checkpoint.control
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
+import { VimeoModule } from '../vimeo/vimeo.module';
 import { VideoQuiz } from './entities/video-quiz.entity';
 import { VideoQuizAnswer } from './entities/video-quiz-answer.entity';
 import { Course } from '../courses/entities/course.entity';
@@ -18,6 +19,7 @@ import { Course } from '../courses/entities/course.entity';
   imports: [
     NotificationsModule,
     EnrollmentModule,
+    VimeoModule,
     TypeOrmModule.forFeature([
       CourseModuleModel,
       Lesson,
