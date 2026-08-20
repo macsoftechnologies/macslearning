@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -279,30 +279,6 @@ export class StudentsService {
     student.approvedAt = new Date();
 
     await this.userRepository.save(student);
-
-    // Auto-enroll into interested course (Program) if selected during registration
-    let customProfile: any = student.customProfile;
-    if (typeof customProfile === 'string') {
-      try {
-        customProfile = JSON.parse(customProfile);
-      } catch (e) {
-        customProfile = {};
-      }
-    }
-    
-    if (customProfile && customProfile.interestedCourse) {
-      try {
-        await this.enrollmentService.autoEnrollStudent(
-          student.id,
-          student.organizationId,
-          customProfile.interestedCourse,
-          undefined, // autoBatchId will be figured out inside autoEnrollStudent
-          student.regionId
-        );
-      } catch (e) {
-        console.error('Failed to auto-enroll approved student:', e);
-      }
-    }
 
     // In a real implementation, send approval email here
 
