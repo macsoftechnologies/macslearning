@@ -76,4 +76,39 @@ export class TranscriptsService {
     });
   }
 
+
+
+  async getMyGrades(organizationId: string, studentId: string) {
+    const grades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
+    if (grades.length === 0) return { grades: [], totalCredits: 0, averageScore: 0 };
+
+    const courseIds = [...new Set(grades.map(g => g.courseId))];
+    const courses = await this.courseRepository.createQueryBuilder('course')
+      .where('course.id IN (:...courseIds)', { courseIds })
+      .andWhere('course.organizationId = :organizationId', { organizationId })
+      .select(['course.id', 'course.title', 'course.credits'])
+      .getMany();
+
+    let totalScore = 0;
+    let totalCredits = 0;
+
+    const populatedGrades = grades.map(grade => {
+      const course = courses.find(c => c.id === grade.courseId);
+      const credits = course?.credits || 0;
+      totalScore += Number(grade.totalScore || 0);
+      totalCredits += credits;
+      return {
+        ...grade,
+        course: { title: course?.title || 'Unknown Course', credits }
+      };
+    });
+
+    const averageScore = grades.length > 0 ? (totalScore / grades.length).toFixed(2) : 0;
+
+    return {
+      grades: populatedGrades,
+      totalCredits,
+      averageScore
+    };
+  }
 }

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res, Param, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, Param, Request, UseGuards } from '@nestjs/common';
 import { TranscriptsService } from './transcripts.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -29,4 +29,12 @@ export class TranscriptsController {
 
     res.end(pdfBuffer);
   }
+
+
+  @Get('my-grades')
+  @Roles('STUDENT')
+  async getMyGrades(@Request() req: any) {
+    return this.transcriptsService.getMyGrades(req.user.organizationId, req.user.id);
+  }
 }
+
