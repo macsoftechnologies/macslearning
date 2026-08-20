@@ -364,8 +364,18 @@ export class UsersService {
       }
     }
 
+    let region = null;
+    if (user.regionId) {
+      try {
+        const regionRepo = this.dataSource.getRepository(Region);
+        region = await regionRepo.findOne({ where: { id: user.regionId } });
+      } catch (e) {
+        // Ignore
+      }
+    }
+
     const { passwordHash, refreshTokens, ...safeUser } = user;
-    return { ...safeUser, organizationName, organizationSlug, organizationLogo };
+    return { ...safeUser, organizationName, organizationSlug, organizationLogo, region };
   }
 
   async updateUser(userId: string, updateData: any, reqUser?: { userType: string; organizationId?: string; isSuperAdminEndpoint?: boolean }) {
