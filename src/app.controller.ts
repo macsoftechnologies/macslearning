@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Controller,
   Get,
@@ -84,7 +84,6 @@ export class AppController {
   }
 
   @Post('upload/public')
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage,
@@ -122,3 +121,4 @@ export class AppController {
     return { url: `/uploads/${folder}/${file.filename}` };
   }
 }
+
