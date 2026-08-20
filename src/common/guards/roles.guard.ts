@@ -3,12 +3,15 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
+  private readonly logger = new Logger(RolesGuard.name);
+
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -24,7 +27,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User type not found in token');
     }
     if (!requiredRoles.includes(user.userType)) {
-      console.log('RolesGuard failed for userType:', user.userType, 'required:', requiredRoles);
+      this.logger.warn(`RolesGuard denied userType=${user.userType}, required=${requiredRoles.join(',')}`);
       throw new ForbiddenException('Access denied: insufficient privileges');
     }
     return true;

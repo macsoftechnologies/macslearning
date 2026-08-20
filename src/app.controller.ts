@@ -84,6 +84,7 @@ export class AppController {
   }
 
   @Post('upload/public')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage,

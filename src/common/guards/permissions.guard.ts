@@ -3,12 +3,15 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
+  private readonly logger = new Logger(PermissionsGuard.name);
+
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -49,7 +52,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     if (!hasPermission) {
-      console.log('PermissionsGuard failed for user:', user.email, 'userType:', user.userType, 'hasPerms:', userPermissions, 'required:', requiredPermissions);
+      this.logger.warn(`PermissionsGuard denied user=${user.email} userType=${user.userType} perms=[${userPermissions.join(',')}] required=[${requiredPermissions.join(',')}]`);
       throw new ForbiddenException('Access denied: insufficient privileges');
     }
 

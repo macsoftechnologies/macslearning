@@ -9,6 +9,7 @@ import {
   Patch,
   BadRequestException,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -34,6 +35,8 @@ import { AuditService } from '../audit/audit.service';
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
@@ -79,8 +82,7 @@ export class UsersController {
     @Body() updateData: UpdateUserDto,
     @Body('customProfile') customProfileRaw: any,
   ) {
-    console.log('--- PATCH USER ---');
-    console.log('customProfileRaw:', customProfileRaw);
+    this.logger.debug('PATCH user - customProfile received: ' + !!customProfileRaw);
     if (customProfileRaw) {
       (updateData as any).customProfile = customProfileRaw;
     }

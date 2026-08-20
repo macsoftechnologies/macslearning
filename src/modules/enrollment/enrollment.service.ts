@@ -160,9 +160,10 @@ export class EnrollmentService {
 
     await this.enrollmentRepository.save(enrollment);
 
-    await this.courseRepository.update(
+    await this.courseRepository.increment(
       { id: courseId, organizationId },
-      { enrolledCount: (course.enrolledCount || 0) + 1 },
+      'enrolledCount',
+      1,
     );
 
     // Notify student of successful enrollment
@@ -469,9 +470,10 @@ export class EnrollmentService {
           });
           await this.enrollmentRepository.save(courseEnrollment);
           
-          await this.courseRepository.update(
+          await this.courseRepository.increment(
             { id: c.id, organizationId },
-            { enrolledCount: (c.enrolledCount || 0) + 1 },
+            'enrolledCount',
+            1,
           );
           
           enrollmentsCount++;
@@ -543,9 +545,10 @@ export class EnrollmentService {
     });
     const saved = await this.enrollmentRepository.save(enrollment as any);
 
-    await this.courseRepository.update(
+    await this.courseRepository.increment(
       { id: enrollmentData.courseId, organizationId },
-      { enrolledCount: (course.enrolledCount || 0) + 1 },
+      'enrolledCount',
+      1,
     );
 
     try {

@@ -6,7 +6,7 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
 
@@ -19,6 +19,8 @@ import { ConfigService } from '@nestjs/config';
 export class NotificationsGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly logger = new Logger(NotificationsGateway.name);
+
   @WebSocketServer()
   server: Server;
 
@@ -42,7 +44,7 @@ export class NotificationsGateway
       const userId = payload.userId;
       if (userId) {
         this.connectedUsers.set(userId, client.id);
-        console.log(`Client connected: ${userId} (${client.id})`);
+        this.logger.log(`Client connected: ${userId} (${client.id})`);
       } else {
         client.disconnect();
       }
@@ -61,7 +63,7 @@ export class NotificationsGateway
     }
     if (disconnectedUserId) {
       this.connectedUsers.delete(disconnectedUserId);
-      console.log(`Client disconnected: ${disconnectedUserId} (${client.id})`);
+      this.logger.log(`Client disconnected: ${disconnectedUserId} (${client.id})`);
     }
   }
 
