@@ -61,7 +61,7 @@ export class FacultyService {
       .createQueryBuilder('enrollment')
       .where('enrollment.organizationId = :organizationId', { organizationId })
       .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-      .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
+      .andWhere('enrollment.status IN (:...statuses)', { statuses: ['ACTIVE', 'COMPLETED'] })
       .select('COUNT(DISTINCT enrollment.studentId)', 'count')
       .getRawOne();
     const totalStudents = parseInt(uniqueStudentsResult?.count || '0', 10);
@@ -70,7 +70,7 @@ export class FacultyService {
       .createQueryBuilder('enrollment')
       .where('enrollment.organizationId = :organizationId', { organizationId })
       .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-      .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
+      .andWhere('enrollment.status IN (:...statuses)', { statuses: ['ACTIVE', 'COMPLETED'] })
       .select('enrollment.courseId', 'courseId')
       .addSelect('COUNT(*)', 'count')
       .groupBy('enrollment.courseId')
@@ -312,7 +312,7 @@ export class FacultyService {
         .leftJoin(User, 'student', 'student.id = enrollment.studentId')
         .where('enrollment.organizationId = :organizationId', { organizationId })
         .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
-        .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
+        .andWhere('enrollment.status IN (:...statuses)', { statuses: ['ACTIVE', 'COMPLETED'] })
         .select('enrollment.courseId', 'courseId')
         .addSelect('enrollment.createdAt', 'enrolledAt')
         .addSelect('student.id', 'studentId')
