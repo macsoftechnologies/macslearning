@@ -186,12 +186,17 @@ export class FacultyService {
         .where('sub.organizationId = :organizationId', { organizationId })
         .andWhere('sub.assignmentId IN (:...assignmentIds)', { assignmentIds })
         .andWhere('sub.status = :status', { status: 'PENDING' })
-        .select([
-          'sub.*',
-          'student.fullName as student_fullName',
-          'student.firstName as student_firstName',
-          'student.lastName as student_lastName',
-        ])
+        .select('sub.id', 'id')
+        .addSelect('sub.assignmentId', 'assignmentId')
+        .addSelect('sub.studentId', 'studentId')
+        .addSelect('sub.status', 'status')
+        .addSelect('sub.submittedAt', 'submittedAt')
+        .addSelect('sub.grade', 'grade')
+        .addSelect('sub.createdAt', 'createdAt')
+        .addSelect('sub.updatedAt', 'updatedAt')
+        .addSelect('student.fullName', 'student_fullName')
+        .addSelect('student.firstName', 'student_firstName')
+        .addSelect('student.lastName', 'student_lastName')
         .orderBy('sub.createdAt', 'ASC')
         .getRawMany();
     }
@@ -213,12 +218,16 @@ export class FacultyService {
         .where('attempt.organizationId = :organizationId', { organizationId })
         .andWhere('attempt.examId IN (:...examIds)', { examIds })
         .andWhere('attempt.status = :status', { status: 'PENDING_REVIEW' })
-        .select([
-          'attempt.*',
-          'student.fullName as student_fullName',
-          'student.firstName as student_firstName',
-          'student.lastName as student_lastName',
-        ])
+        .select('attempt.id', 'id')
+        .addSelect('attempt.examId', 'examId')
+        .addSelect('attempt.studentId', 'studentId')
+        .addSelect('attempt.status', 'status')
+        .addSelect('attempt.score', 'score')
+        .addSelect('attempt.createdAt', 'createdAt')
+        .addSelect('attempt.updatedAt', 'updatedAt')
+        .addSelect('student.fullName', 'student_fullName')
+        .addSelect('student.firstName', 'student_firstName')
+        .addSelect('student.lastName', 'student_lastName')
         .orderBy('attempt.createdAt', 'ASC')
         .getRawMany();
     }
@@ -304,15 +313,13 @@ export class FacultyService {
         .where('enrollment.organizationId = :organizationId', { organizationId })
         .andWhere('enrollment.courseId IN (:...courseIds)', { courseIds })
         .andWhere('enrollment.status = :status', { status: In(['ACTIVE', 'COMPLETED']) })
-        .select([
-          'enrollment.courseId as courseId',
-          'enrollment.createdAt as enrolledAt',
-          'student.id as studentId',
-          'student.fullName as studentFullName',
-          'student.email as studentEmail',
-          'student.mobile as studentMobile',
-          'student.status as studentStatus',
-        ])
+        .select('enrollment.courseId', 'courseId')
+        .addSelect('enrollment.createdAt', 'enrolledAt')
+        .addSelect('student.id', 'studentId')
+        .addSelect('student.fullName', 'studentFullName')
+        .addSelect('student.email', 'studentEmail')
+        .addSelect('student.mobile', 'studentMobile')
+        .addSelect('student.status', 'studentStatus')
         .getRawMany();
 
       courseEnrollments.forEach((e) => {
