@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -23,6 +23,7 @@ import { Semester } from '../semesters/entities/semester.entity';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 
 import { StudentProfile } from './entities/student-profile.entity';
+import { EnrollmentService } from '../enrollment/enrollment.service';
 
 @Injectable()
 export class StudentsService {
@@ -43,6 +44,7 @@ export class StudentsService {
     @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
     @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
     @InjectRepository(OfflineGrade) private offlineGradeRepository: Repository<OfflineGrade>,
+    private enrollmentService: EnrollmentService,
   ) {}
 
   async getAllStudents(organizationId: string, queryDto: any) {
@@ -278,6 +280,30 @@ export class StudentsService {
 
     await this.userRepository.save(student);
 
+    // Auto-enroll into interested course (Program) if selected during registration
+    let customProfile: any = student.customProfile;
+    if (typeof customProfile === 'string') {
+      try {
+        customProfile = JSON.parse(customProfile);
+      } catch (e) {
+        customProfile = {};
+      }
+    }
+    
+    if (customProfile && customProfile.interestedCourse) {
+      try {
+        await this.enrollmentService.autoEnrollStudent(
+          student.id,
+          student.organizationId,
+          customProfile.interestedCourse,
+          undefined, // autoBatchId will be figured out inside autoEnrollStudent
+          student.regionId
+        );
+      } catch (e) {
+        console.error('Failed to auto-enroll approved student:', e);
+      }
+    }
+
     // In a real implementation, send approval email here
 
     return { message: 'Student approved successfully', student };
@@ -474,7 +500,7 @@ export class StudentsService {
     const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).andWhere('batch.organizationId = :organizationId', { organizationId }).getMany() : [];
     const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).andWhere('semester.organizationId = :organizationId', { organizationId }).getMany() : [];
 
-    // Fetch offline grades — filtered by organizationId
+    // Fetch offline grades â€” filtered by organizationId
     const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
 
     const totalLessonsMap = (this as any)._tempTotalLessonsMap || new Map();
@@ -548,3 +574,5 @@ export class StudentsService {
     };
   }
 }
+
+
