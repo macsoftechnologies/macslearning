@@ -503,7 +503,7 @@ export class StudentsService {
           } : null,
           batch: batches.find(b => b.id === e.batchId) || null,
           semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
-          grade: offlineGrades.find(g => g.courseId === e.courseId && (g.academicBatchId === e.batchId || !g.academicBatchId) && (g.semesterId === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId) || !g.semesterId)) || null,
+          grade: offlineGrades.find(g => g.courseId === e.courseId) || null,
           completedLessonIds: Array.from(completedLessonIdsSet),
           curriculum: {
             videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
