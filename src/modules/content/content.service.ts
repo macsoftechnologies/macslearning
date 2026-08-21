@@ -39,9 +39,10 @@ export class ContentService {
     organizationId: string,
     courseId: string,
     moduleData: any,
+    userType?: string,
   ) {
     const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
-    const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
+    const contentStatus = (userType === 'FACULTY' && course?.status === 'PUBLISHED') ? 'IN_REVIEW' : 'PUBLISHED';
 
     const courseModule = this.moduleRepository.create({
       ...moduleData,
@@ -87,9 +88,10 @@ export class ContentService {
     courseId: string,
     moduleId: string,
     lessonData: any,
+    userType?: string,
   ) {
     const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
-    const contentStatus = course?.status === 'PUBLISHED' ? 'IN_REVIEW' : 'PUBLISHED';
+    const contentStatus = (userType === 'FACULTY' && course?.status === 'PUBLISHED') ? 'IN_REVIEW' : 'PUBLISHED';
 
     const lesson = this.lessonRepository.create({
       ...lessonData,
@@ -118,9 +120,10 @@ export class ContentService {
     courseId: string,
     moduleId: string,
     updateData: any,
+    userType?: string,
   ) {
     const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
-    if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
+    if (userType === 'FACULTY' && course?.status === 'PUBLISHED' && !updateData.contentStatus) {
       updateData.contentStatus = 'IN_REVIEW';
     }
     
@@ -157,9 +160,10 @@ export class ContentService {
     moduleId: string,
     lessonId: string,
     updateData: any,
+    userType?: string,
   ) {
     const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
-    if (course?.status === 'PUBLISHED' && !updateData.contentStatus) {
+    if (userType === 'FACULTY' && course?.status === 'PUBLISHED' && !updateData.contentStatus) {
       updateData.contentStatus = 'IN_REVIEW';
     }
 
