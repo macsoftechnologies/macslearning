@@ -314,6 +314,8 @@ export class FacultyService {
         .andWhere('enrollment.status IN (:...statuses)', { statuses: ['ACTIVE', 'COMPLETED'] })
         .select('enrollment.courseId', 'courseId')
         .addSelect('enrollment.createdAt', 'enrolledAt')
+        .addSelect('enrollment.status', 'enrollmentStatus')
+        .addSelect('enrollment.progressPercentage', 'progressPercentage')
         .addSelect('student.id', 'studentId')
         .addSelect('student.fullName', 'studentFullName')
         .addSelect('student.email', 'studentEmail')
@@ -330,7 +332,8 @@ export class FacultyService {
           fullName: e.studentFullName || 'Unknown',
           email: e.studentEmail,
           mobile: e.studentMobile,
-          status: e.studentStatus,
+          status: e.enrollmentStatus || e.studentStatus,
+          progressPercentage: Number(e.progressPercentage || 0),
           enrolledAt: e.enrolledAt,
         });
       });
