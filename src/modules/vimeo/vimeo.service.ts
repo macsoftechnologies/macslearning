@@ -109,4 +109,169 @@ export class VimeoService {
 
   async getOrganizationFolderStorage(orgName: string): Promise<number> { return 0; }
   async deleteLocalVideo(filename: string): Promise<{ deleted: boolean; filename: string }> { return { deleted: true, filename }; }
+
+  extractVimeoId(input: string): string | null {
+    if (!input) return null;
+    const str = input.trim();
+    if (/^\d+$/.test(str)) return str;
+    const match = str.match(/(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)(\d+)/);
+    return match ? match[1] : null;
+  }
+
+  private parseTimestampToSeconds(ts: string): number {
+    const parts = ts.trim().split(':');
+    if (parts.length === 3) {
+      const hours = parseFloat(parts[0]) || 0;
+      const minutes = parseFloat(parts[1]) || 0;
+      const seconds = parseFloat(parts[2]) || 0;
+      return Math.floor(hours * 3600 + minutes * 60 + seconds);
+    } else if (parts.length === 2) {
+      const minutes = parseFloat(parts[0]) || 0;
+      const seconds = parseFloat(parts[1]) || 0;
+      return Math.floor(minutes * 60 + seconds);
+    }
+    return 0;
+  }
+
+  private formatSecondsToDisplay(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const hrs = Math.floor(mins / 60);
+    if (hrs > 0) {
+      const remMins = mins % 60;
+      return `${hrs}:${remMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  private parseWebVTT(vttContent: string) {
+    const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const cues: Array<{
+      id: string;
+      start: string;
+      end: string;
+      startSeconds: number;
+      endSeconds: number;
+      displayTime: string;
+      text: string;
+    }> = [];
+
+    let i = 0;
+    let cueIndex = 1;
+
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (line.includes('-->')) {
+        const parts = line.split('-->');
+        const startRaw = parts[0].trim().split(' ')[0];
+        const endRaw = parts[1].trim().split(' ')[0];
+
+        const startSeconds = this.parseTimestampToSeconds(startRaw);
+        const endSeconds = this.parseTimestampToSeconds(endRaw);
+        const displayTime = this.formatSecondsToDisplay(startSeconds);
+
+        i++;
+        const textLines: string[] = [];
+        while (i < lines.length && lines[i].trim() !== '' && !lines[i].includes('-->')) {
+          const cleanLine = lines[i].replace(/<[^>]+>/g, '').trim();
+          if (cleanLine) {
+            textLines.push(cleanLine);
+          }
+          i++;
+        }
+
+        const text = textLines.join(' ');
+        if (text) {
+          cues.push({
+            id: `cue-${cueIndex++}`,
+            start: startRaw,
+            end: endRaw,
+            startSeconds,
+            endSeconds,
+            displayTime,
+            text,
+          });
+        }
+      } else {
+        i++;
+      }
+    }
+
+    const fullText = cues.map(c => c.text).join(' ');
+    return { cues, fullText, totalCues: cues.length };
+  }
+
+  async getVideoTranscript(videoIdOrUrl: string) {
+    const videoId = this.extractVimeoId(videoIdOrUrl);
+    if (!videoId) {
+      throw new NotFoundException('Invalid Vimeo video URL or ID provided.');
+    }
+
+    if (!this.vimeoClient) {
+      throw new InternalServerErrorException('Vimeo client is not initialized. Check server .env settings.');
+    }
+
+    try {
+      this.logger.log(`Fetching text tracks for Vimeo Video ID: ${videoId}`);
+      const tracksRes = await this.vimeoRequest({
+        method: 'GET',
+        path: `/videos/${videoId}/texttracks`,
+      });
+
+      const tracks = tracksRes?.body?.data || [];
+      this.logger.log(`Found ${tracks.length} text tracks for video ${videoId}`);
+
+      if (tracks.length === 0) {
+        return {
+          available: false,
+          message: 'No transcript or captions found for this Vimeo video yet. (Vimeo may still be processing auto-transcription).',
+          videoId,
+          cues: [],
+          fullText: '',
+          totalCues: 0,
+        };
+      }
+
+      // Pick the best track (prioritize active, captions, or english)
+      const primaryTrack = tracks.find((t: any) => t.active && (t.type === 'captions' || t.type === 'subtitles')) ||
+        tracks.find((t: any) => t.type === 'captions' || t.type === 'subtitles') ||
+        tracks[0];
+
+      if (!primaryTrack || !primaryTrack.link) {
+        return {
+          available: false,
+          message: 'Transcript track found but download link is unavailable.',
+          videoId,
+          cues: [],
+          fullText: '',
+          totalCues: 0,
+        };
+      }
+
+      // Download the WebVTT file content
+      const response = await fetch(primaryTrack.link);
+      if (!response.ok) {
+        throw new Error(`Failed to download transcript file: HTTP ${response.status}`);
+      }
+
+      const vttContent = await response.text();
+      const parsed = this.parseWebVTT(vttContent);
+
+      return {
+        available: true,
+        videoId,
+        trackInfo: {
+          id: primaryTrack.id || primaryTrack.uri,
+          language: primaryTrack.language,
+          name: primaryTrack.name,
+          type: primaryTrack.type,
+        },
+        ...parsed,
+      };
+    } catch (err: any) {
+      this.logger.error(`Error fetching transcript for video ${videoId}:`, err);
+      throw new InternalServerErrorException(err.message || 'Failed to retrieve Vimeo transcript.');
+    }
+  }
 }
+
