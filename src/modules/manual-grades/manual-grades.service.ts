@@ -56,20 +56,13 @@ export class ManualGradesService {
       .select(['user.id', 'user.fullName', 'user.email'])
       .getMany();
 
-    // 3. Get existing offline grades — filtered by organizationId
-    const queryGrade = this.offlineGradeRepository.createQueryBuilder('grade')
+    // 3. Get existing offline grades — filtered by organizationId and courseId
+    const existingGrades = await this.offlineGradeRepository.createQueryBuilder('grade')
       .where('grade.studentId IN (:...studentIds)', { studentIds })
       .andWhere('grade.organizationId = :organizationId', { organizationId })
-      .andWhere('grade.courseId = :courseId', { courseId });
-
-    if (batchId && batchId !== 'all') {
-      queryGrade.andWhere('grade.academicBatchId = :batchId', { batchId });
-    }
-    if (semesterId && semesterId !== 'all' && semesterId !== 'none') {
-      queryGrade.andWhere('grade.semesterId = :semesterId', { semesterId });
-    }
-
-    const existingGrades = await queryGrade.getMany();
+      .andWhere('grade.courseId = :courseId', { courseId })
+      .orderBy('grade.updatedAt', 'DESC')
+      .getMany();
 
     // 4. Get online assessment results (70% component)
     const onlineResults = await this.assessmentResultRepository.createQueryBuilder('result')
@@ -91,14 +84,14 @@ export class ManualGradesService {
       const student = students.find(s => s.id === enrollment.studentId);
       const grade = existingGrades.find(g => g.studentId === enrollment.studentId);
 
-      let assignmentScore70 = grade?.assignmentScore || 0;
+      let assignmentScore70 = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : 0;
       // If no manually saved assignment score exists and student has taken online exams, compute 70% portion
-      if (!grade?.assignmentScore && onlineCountMap[enrollment.studentId] > 0) {
+      if (!assignmentScore70 && onlineCountMap[enrollment.studentId] > 0) {
         const avgPercentage = onlineScoreMap[enrollment.studentId] / onlineCountMap[enrollment.studentId];
         assignmentScore70 = Math.round((avgPercentage * 0.70) * 100) / 100;
       }
 
-      const finalExamScore30 = grade?.finalExamScore || 0;
+      const finalExamScore30 = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null ? Number(grade.finalExamScore) : 0;
       const totalScore = Math.min(100, Math.round((assignmentScore70 + Number(finalExamScore30)) * 100) / 100);
       const gradeLetter = this.calculateGradeLetter(totalScore);
 
@@ -113,6 +106,7 @@ export class ManualGradesService {
         finalExamScore: finalExamScore30,  // 30% manual component
         totalScore,
         grade: gradeLetter,
+        isGraded: !!grade,
       };
     });
 
@@ -142,36 +136,40 @@ export class ManualGradesService {
       const totalScore = Math.min(100, Math.round((score70 + score30) * 100) / 100);
       const grade = this.calculateGradeLetter(totalScore);
 
-      const whereClause: any = { studentId, courseId };
-      if (organizationId) whereClause.organizationId = organizationId;
-      if (academicBatchId && academicBatchId !== 'none') {
-        whereClause.academicBatchId = academicBatchId;
-      } else if (academicBatchId === 'none') {
-        whereClause.academicBatchId = IsNull();
-      }
-      if (semesterId) {
-        whereClause.semesterId = semesterId;
-      } else {
-        whereClause.semesterId = IsNull();
-      }
-
-      let existing = await this.offlineGradeRepository.findOne({
-        where: whereClause,
+      // Find all existing records for this student and course
+      const existingList = await this.offlineGradeRepository.find({
+        where: {
+          studentId,
+          courseId,
+          ...(organizationId ? { organizationId } : {})
+        },
+        order: { updatedAt: 'DESC' }
       });
 
-      if (existing) {
-        existing.assignmentScore = score70;
-        existing.finalExamScore = score30;
-        existing.totalScore = totalScore;
-        existing.grade = grade;
-        if (semesterId) existing.semesterId = semesterId;
-        results.push(await this.offlineGradeRepository.save(existing));
+      const batchVal = academicBatchId === 'none' || !academicBatchId ? null : academicBatchId;
+      const semVal = semesterId === 'all' || semesterId === 'none' || !semesterId ? null : semesterId;
+
+      if (existingList.length > 0) {
+        const [primary, ...duplicates] = existingList;
+        primary.assignmentScore = score70;
+        primary.finalExamScore = score30;
+        primary.totalScore = totalScore;
+        primary.grade = grade;
+        primary.academicBatchId = batchVal;
+        primary.semesterId = semVal;
+        if (organizationId) primary.organizationId = organizationId;
+        results.push(await this.offlineGradeRepository.save(primary));
+
+        // Clean up any duplicate records from past tests
+        if (duplicates.length > 0) {
+          await this.offlineGradeRepository.remove(duplicates);
+        }
       } else {
         const newGrade = this.offlineGradeRepository.create({
           studentId,
           courseId,
-          semesterId: semesterId || undefined,
-          academicBatchId,
+          semesterId: semVal || undefined,
+          academicBatchId: batchVal || undefined,
           organizationId,
           assignmentScore: score70,
           finalExamScore: score30,

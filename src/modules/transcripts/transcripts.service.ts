@@ -18,7 +18,18 @@ export class TranscriptsService {
     const student = await this.userRepository.findOne({ where: { id: studentId, organizationId, isDeleted: false } });
     if (!student) throw new NotFoundException('Student not found');
 
-    const grades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
+    const allGrades = await this.offlineGradeRepository.find({
+      where: { studentId, organizationId },
+      order: { updatedAt: 'DESC' }
+    });
+    // Deduplicate by courseId (keep latest)
+    const uniqueMap = new Map<string, OfflineGrade>();
+    for (const g of allGrades) {
+      if (!uniqueMap.has(g.courseId)) {
+        uniqueMap.set(g.courseId, g);
+      }
+    }
+    const grades = Array.from(uniqueMap.values());
     const courseIds = [...new Set(grades.map(g => g.courseId))];
     const courses = courseIds.length > 0 
       ? await this.courseRepository.createQueryBuilder('course')
@@ -79,8 +90,20 @@ export class TranscriptsService {
 
 
   async getMyGrades(organizationId: string, studentId: string) {
-    const grades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
-    if (grades.length === 0) return { grades: [], totalCredits: 0, averageScore: 0 };
+    const allGrades = await this.offlineGradeRepository.find({
+      where: { studentId, organizationId },
+      order: { updatedAt: 'DESC' }
+    });
+    if (allGrades.length === 0) return { grades: [], totalCredits: 0, averageScore: 0 };
+
+    // Deduplicate by courseId (keep latest)
+    const uniqueMap = new Map<string, OfflineGrade>();
+    for (const g of allGrades) {
+      if (!uniqueMap.has(g.courseId)) {
+        uniqueMap.set(g.courseId, g);
+      }
+    }
+    const grades = Array.from(uniqueMap.values());
 
     const courseIds = [...new Set(grades.map(g => g.courseId))];
     const courses = await this.courseRepository.createQueryBuilder('course')
