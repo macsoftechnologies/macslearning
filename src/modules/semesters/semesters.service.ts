@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Semester } from './entities/semester.entity';
 import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
+import { Course } from '../courses/entities/course.entity';
 
 @Injectable()
 export class SemestersService {
@@ -11,6 +12,8 @@ export class SemestersService {
     private semestersRepository: Repository<Semester>,
     @InjectRepository(ProgramCourseMapping)
     private mappingRepository: Repository<ProgramCourseMapping>,
+    @InjectRepository(Course)
+    private courseRepository: Repository<Course>,
   ) {}
 
   async findAll(organizationId: string): Promise<any[]> {
@@ -93,6 +96,13 @@ export class SemestersService {
       });
       await this.mappingRepository.save(mapping);
     }
+
+    // Also sync the course's primary semester and program if not set or matching
+    await this.courseRepository.update(
+      { id: courseId, organizationId },
+      { semesterId, programId }
+    );
+
     return { success: true };
   }
 
@@ -103,6 +113,24 @@ export class SemestersService {
       semesterId,
       courseId
     });
+
+    // Check if there are other semester mappings for this course
+    const remainingMappings = await this.mappingRepository.find({
+      where: { organizationId, courseId }
+    });
+
+    if (remainingMappings.length > 0) {
+      await this.courseRepository.update(
+        { id: courseId, organizationId },
+        { semesterId: remainingMappings[0].semesterId, programId: remainingMappings[0].programId }
+      );
+    } else {
+      await this.courseRepository.update(
+        { id: courseId, organizationId },
+        { semesterId: null as any, programId: null as any }
+      );
+    }
+
     return { success: true };
   }
 }
