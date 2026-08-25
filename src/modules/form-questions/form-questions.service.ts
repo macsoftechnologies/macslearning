@@ -16,9 +16,19 @@ export class FormQuestionsService {
   }
 
   async findAll(organizationId: string): Promise<FormQuestion[]> {
-    return await this.questionRepository.find({
+    const questions = await this.questionRepository.find({
       where: { organizationId },
       order: { order: 'ASC' },
+    });
+
+    return questions.map(q => {
+      if (q.key === 'gender') {
+        return {
+          ...q,
+          options: ['Male', 'Female']
+        };
+      }
+      return q;
     });
   }
 
