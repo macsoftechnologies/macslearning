@@ -212,8 +212,8 @@ export class VimeoService {
       }
     }
 
-    // Group individual subtitle cues into complete, natural sentences
-    const sentences: Array<{
+    // Group cues into complete paragraphs (matching Vimeo's transcript block view)
+    const paragraphs: Array<{
       id: string;
       startSeconds: number;
       endSeconds: number;
@@ -221,43 +221,48 @@ export class VimeoService {
       text: string;
     }> = [];
 
-    let currentSentence = '';
-    let sentenceStartSeconds = 0;
-    let sentenceEndSeconds = 0;
-    let sentenceIndex = 1;
+    let currentPara = '';
+    let paraStartSeconds = 0;
+    let paraEndSeconds = 0;
+    let paraIndex = 1;
 
     for (let j = 0; j < cues.length; j++) {
       const cue = cues[j];
-      if (!currentSentence) {
-        sentenceStartSeconds = cue.startSeconds;
+      if (!currentPara) {
+        paraStartSeconds = cue.startSeconds;
       }
-      
-      currentSentence = currentSentence ? `${currentSentence} ${cue.text}` : cue.text;
-      sentenceEndSeconds = cue.endSeconds;
 
-      // If sentence ends with sentence-terminating punctuation (. ? !) or large gap to next cue
-      const isPunctuationEnd = /[.?!]$/.test(cue.text.trim());
-      const isNextCueFar = j < cues.length - 1 && (cues[j + 1].startSeconds - cue.endSeconds > 2.5);
-      const isLongEnough = currentSentence.split(' ').length >= 15;
+      currentPara = currentPara ? `${currentPara} ${cue.text}` : cue.text;
+      paraEndSeconds = cue.endSeconds;
 
-      if (isPunctuationEnd || isNextCueFar || isLongEnough || j === cues.length - 1) {
-        sentences.push({
-          id: `sentence-${sentenceIndex++}`,
-          startSeconds: sentenceStartSeconds,
-          endSeconds: sentenceEndSeconds,
-          displayTime: this.formatSecondsToDisplay(sentenceStartSeconds),
-          text: currentSentence.trim(),
+      const wordsCount = currentPara.trim().split(/\s+/).length;
+      const duration = paraEndSeconds - paraStartSeconds;
+      const nextCue = cues[j + 1];
+      const hasPauseAfter = nextCue ? (nextCue.startSeconds - cue.endSeconds > 1.8) : true;
+      const isSentenceEnd = /[.?!]$/.test(cue.text.trim());
+
+      // Vimeo-style paragraph grouping: combines short questions + following sentences until ~25-35 words or pause
+      const shouldBreak = (isSentenceEnd && (wordsCount >= 22 || duration >= 14 || hasPauseAfter)) || (wordsCount >= 40) || j === cues.length - 1;
+
+      if (shouldBreak) {
+        paragraphs.push({
+          id: `para-${paraIndex++}`,
+          startSeconds: paraStartSeconds,
+          endSeconds: paraEndSeconds,
+          displayTime: this.formatSecondsToDisplay(paraStartSeconds),
+          text: currentPara.trim(),
         });
-        currentSentence = '';
+        currentPara = '';
       }
     }
 
     const fullText = cues.map(c => c.text).join(' ');
     return {
+      totalParagraphs: paragraphs.length,
       totalCues: cues.length,
-      totalSentences: sentences.length,
       fullText,
-      sentences,
+      paragraphs,
+      sentences: paragraphs,
       cues,
     };
   }
