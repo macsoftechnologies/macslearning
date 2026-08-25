@@ -144,6 +144,19 @@ export class VimeoService {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
+  private decodeHtmlEntities(text: string): string {
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   private parseWebVTT(vttContent: string) {
     const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
     const cues: Array<{
@@ -180,7 +193,9 @@ export class VimeoService {
           i++;
         }
 
-        const text = textLines.join(' ');
+        const rawText = textLines.join(' ');
+        const text = this.decodeHtmlEntities(rawText);
+
         if (text) {
           cues.push({
             id: `cue-${cueIndex++}`,
@@ -197,8 +212,54 @@ export class VimeoService {
       }
     }
 
+    // Group individual subtitle cues into complete, natural sentences
+    const sentences: Array<{
+      id: string;
+      startSeconds: number;
+      endSeconds: number;
+      displayTime: string;
+      text: string;
+    }> = [];
+
+    let currentSentence = '';
+    let sentenceStartSeconds = 0;
+    let sentenceEndSeconds = 0;
+    let sentenceIndex = 1;
+
+    for (let j = 0; j < cues.length; j++) {
+      const cue = cues[j];
+      if (!currentSentence) {
+        sentenceStartSeconds = cue.startSeconds;
+      }
+      
+      currentSentence = currentSentence ? `${currentSentence} ${cue.text}` : cue.text;
+      sentenceEndSeconds = cue.endSeconds;
+
+      // If sentence ends with sentence-terminating punctuation (. ? !) or large gap to next cue
+      const isPunctuationEnd = /[.?!]$/.test(cue.text.trim());
+      const isNextCueFar = j < cues.length - 1 && (cues[j + 1].startSeconds - cue.endSeconds > 2.5);
+      const isLongEnough = currentSentence.split(' ').length >= 15;
+
+      if (isPunctuationEnd || isNextCueFar || isLongEnough || j === cues.length - 1) {
+        sentences.push({
+          id: `sentence-${sentenceIndex++}`,
+          startSeconds: sentenceStartSeconds,
+          endSeconds: sentenceEndSeconds,
+          displayTime: this.formatSecondsToDisplay(sentenceStartSeconds),
+          text: currentSentence.trim(),
+        });
+        currentSentence = '';
+      }
+    }
+
     const fullText = cues.map(c => c.text).join(' ');
-    return { cues, fullText, totalCues: cues.length };
+    return {
+      totalCues: cues.length,
+      totalSentences: sentences.length,
+      fullText,
+      sentences,
+      cues,
+    };
   }
 
   async getVideoTranscript(videoIdOrUrl: string) {
