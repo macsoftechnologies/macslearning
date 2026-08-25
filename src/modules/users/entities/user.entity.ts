@@ -64,6 +64,23 @@ export class User {
   })
   status: string;
 
+  @Column({
+    type: 'enum',
+    enum: ['ATA', 'NON_ATA'],
+    default: 'NON_ATA',
+  })
+  ataStatus: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['NOT_REQUIRED', 'PENDING', 'SCHEDULED', 'COMPLETED', 'REJECTED'],
+    default: 'PENDING',
+  })
+  interviewStatus: string;
+
+  @Column({ type: 'json', nullable: true })
+  interviewDetails: any;
+
   @Column({ default: false })
   emailVerified: boolean;
 

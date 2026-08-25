@@ -20,6 +20,9 @@ export class Region {
   @Column({ type: 'boolean', default: false })
   isGlobal: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isAta: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

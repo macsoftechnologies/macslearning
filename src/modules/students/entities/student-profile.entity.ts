@@ -42,6 +42,9 @@ export class StudentProfile {
   @Column({ type: 'varchar', nullable: true })
   countryOfCitizenship: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  countryLivingIn: string;
+
   @Column({ type: 'date', nullable: true })
   bornAgainDate: string;
 
@@ -101,13 +104,21 @@ export class StudentProfile {
 
   @Column({ type: 'json', nullable: true })
   documents: {
+    photo?: { url: string; name?: string } | string;
+    aadhaarFront?: { url: string; name?: string } | string;
+    aadhaarBack?: { url: string; name?: string } | string;
+    tenthCert?: { url: string; name?: string } | string;
+    interCert?: { url: string; name?: string } | string;
+    degreeCert?: { url: string; name?: string } | string;
+    degreeTranscript?: { url: string; name?: string } | string;
+    referenceLetter?: { url: string; name?: string } | string;
+    certificates?: Array<{ url: string; name?: string; size?: number } | string>;
     aadhar?: string;
     ssc?: string;
     inter?: string;
     degree?: string;
     any?: string;
     otherCopies?: string[];
-    referenceLetter?: string;
   };
 
   @Column({ type: 'boolean', default: false })

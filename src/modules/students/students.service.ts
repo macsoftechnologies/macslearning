@@ -21,14 +21,13 @@ import { Program } from '../programs/entities/program.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
-
 import { StudentProfile } from './entities/student-profile.entity';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 
 @Injectable()
 export class StudentsService {
   constructor(
-      private dataSource: DataSource,
+    private dataSource: DataSource,
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(StudentProfile) private studentProfileRepository: Repository<StudentProfile>,
     @InjectRepository(Enrollment)
@@ -80,13 +79,20 @@ export class StudentsService {
         email: userEntity.email,
         mobile: userEntity.mobile,
         status: userEntity.status,
+        ataStatus: userEntity.ataStatus || 'NON_ATA',
+        interviewStatus: userEntity.interviewStatus || 'PENDING',
+        interviewDetails: userEntity.interviewDetails || {},
         createdAt: userEntity.createdAt,
-        customProfile: userEntity.customProfile || {}, 
-        regionId: (userEntity as any).region ? { 
-           _id: (userEntity as any).region.id, 
-           id: (userEntity as any).region.id, 
-           name: (userEntity as any).region.name 
-        } : null,
+        customProfile: userEntity.customProfile || {},
+        studentProfile: userEntity.studentProfile || null,
+        regionId: (userEntity as any).region
+          ? {
+              _id: (userEntity as any).region.id,
+              id: (userEntity as any).region.id,
+              name: (userEntity as any).region.name,
+              isAta: (userEntity as any).region.isAta,
+            }
+          : null,
       };
     });
 
@@ -97,35 +103,47 @@ export class StudentsService {
         .createQueryBuilder('enrollment')
         .where('enrollment.organizationId = :organizationId', { organizationId })
         .andWhere('enrollment.studentId IN (:...studentIds)', { studentIds })
-        .andWhere('enrollment.status IN (:...status)', { status: ['ACTIVE', 'COMPLETED'] })
+        .andWhere('enrollment.status IN (:...status)', {
+          status: ['ACTIVE', 'COMPLETED'],
+        })
         .getMany();
 
-      const programIds = [...new Set(enrollmentsData.map(e => e.programId).filter(Boolean))];
-      let programsMap: Record<string, number> = {};
+      const programIds = [
+        ...new Set(enrollmentsData.map((e) => e.programId).filter(Boolean)),
+      ];
+      const programsMap: Record<string, number> = {};
       if (programIds.length > 0) {
-         const programRows = await this.enrollmentRepository.manager
-            .createQueryBuilder()
-            .select(['p.id AS id', 'p.totalSubjects AS totalSubjects'])
-            .from('programs', 'p')
-            .where('p.id IN (:...programIds)', { programIds })
-            .getRawMany();
-         programRows.forEach(p => programsMap[p.id] = p.totalSubjects);
+        const programRows = await this.enrollmentRepository.manager
+          .createQueryBuilder()
+          .select(['p.id AS id', 'p.totalSubjects AS totalSubjects'])
+          .from('programs', 'p')
+          .where('p.id IN (:...programIds)', { programIds })
+          .getRawMany();
+        programRows.forEach((p) => (programsMap[p.id] = p.totalSubjects));
       }
 
       data.forEach((s) => {
-        const sEnrollments = enrollmentsData.filter(e => e.studentId === s.id);
-        const programEnrollment = sEnrollments.find(e => e.programId && !e.courseId);
-        
+        const sEnrollments = enrollmentsData.filter((e) => e.studentId === s.id);
+        const programEnrollment = sEnrollments.find(
+          (e) => e.programId && !e.courseId,
+        );
+
         if (programEnrollment) {
-           const completedCourses = sEnrollments.filter(e => e.programId === programEnrollment.programId && e.courseId && e.status === 'COMPLETED').length;
-           const totalSubjects = programsMap[programEnrollment.programId] || 30;
-           (s as any).programProgress = `${completedCourses} / ${totalSubjects}`;
-           (s as any).enrolledCoursesCount = completedCourses; // fallback
-           (s as any).expectedGraduationDate = programEnrollment.expectedGraduationDate;
+          const completedCourses = sEnrollments.filter(
+            (e) =>
+              e.programId === programEnrollment.programId &&
+              e.courseId &&
+              e.status === 'COMPLETED',
+          ).length;
+          const totalSubjects = programsMap[programEnrollment.programId] || 30;
+          (s as any).programProgress = `${completedCourses} / ${totalSubjects}`;
+          (s as any).enrolledCoursesCount = completedCourses;
+          (s as any).expectedGraduationDate =
+            programEnrollment.expectedGraduationDate;
         } else {
-           const enrolledCourses = sEnrollments.filter(e => e.courseId).length;
-           (s as any).programProgress = `${enrolledCourses} Courses`;
-           (s as any).enrolledCoursesCount = enrolledCourses;
+          const enrolledCourses = sEnrollments.filter((e) => e.courseId).length;
+          (s as any).programProgress = `${enrolledCourses} Courses`;
+          (s as any).enrolledCoursesCount = enrolledCourses;
         }
       });
     }
@@ -145,8 +163,6 @@ export class StudentsService {
     });
     if (!student) throw new NotFoundException('Student not found');
     delete (student as any).passwordHash;
-    // customProfile is already loaded directly on user
-    return student;
     return student;
   }
 
@@ -165,7 +181,7 @@ export class StudentsService {
     });
     if (!student) throw new NotFoundException('Student not found');
 
-    const userUpdateFields = ['fullName', 'mobile', 'regionId'];
+    const userUpdateFields = ['fullName', 'mobile', 'regionId', 'ataStatus'];
     const userPayload: any = {};
     const profilePayload: any = {};
 
@@ -190,8 +206,12 @@ export class StudentsService {
       await this.userRepository.update({ id: studentId }, { customProfile });
     }
 
-    const updatedStudent = await this.userRepository.findOne({ where: { id: studentId } });
-    delete (updatedStudent as any).passwordHash;
+    const updatedStudent = await this.userRepository.findOne({
+      where: { id: studentId },
+    });
+    if (updatedStudent) {
+      delete (updatedStudent as any).passwordHash;
+    }
     return updatedStudent;
   }
 
@@ -244,23 +264,72 @@ export class StudentsService {
         email: userEntity.email,
         mobile: userEntity.mobile,
         status: userEntity.status,
+        ataStatus: userEntity.ataStatus || 'NON_ATA',
+        interviewStatus: userEntity.interviewStatus || 'PENDING',
+        interviewDetails: userEntity.interviewDetails || {},
         createdAt: userEntity.createdAt,
-        customProfile: userEntity.customProfile || {}, 
-        regionId: (userEntity as any).region ? { 
-           _id: (userEntity as any).region.id, 
-           id: (userEntity as any).region.id, 
-           name: (userEntity as any).region.name 
-        } : null,
+        customProfile: userEntity.customProfile || {},
+        studentProfile: userEntity.studentProfile || null,
+        regionId: (userEntity as any).region
+          ? {
+              _id: (userEntity as any).region.id,
+              id: (userEntity as any).region.id,
+              name: (userEntity as any).region.name,
+              isAta: (userEntity as any).region.isAta,
+            }
+          : null,
       };
     });
 
     return createPaginatedResponse(data, totalItems, page, limit);
   }
 
+  async scheduleInterview(
+    studentId: string,
+    adminId: string,
+    interviewData: {
+      zoomMeetingUrl?: string;
+      scheduledDate?: string;
+      scheduledTime?: string;
+      interviewerNotes?: string;
+    },
+    organizationId?: string,
+  ) {
+    const whereClause: any = {
+      id: studentId,
+      userType: 'STUDENT',
+      isDeleted: false,
+    };
+    if (organizationId) whereClause.organizationId = organizationId;
+
+    const student = await this.userRepository.findOne({ where: whereClause });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    student.interviewStatus = 'SCHEDULED';
+    student.interviewDetails = {
+      ...(student.interviewDetails || {}),
+      ...interviewData,
+      scheduledAt: new Date(),
+      scheduledBy: adminId,
+    };
+
+    await this.userRepository.save(student);
+
+    return { message: 'Interview scheduled successfully', student };
+  }
+
   async approveStudent(
     studentId: string,
     adminId: string,
     organizationId?: string,
+    approvalData?: {
+      admissionNotes?: string;
+      batchId?: string;
+      semesterId?: string;
+      programId?: string;
+    },
   ) {
     const whereClause: any = {
       id: studentId,
@@ -275,12 +344,24 @@ export class StudentsService {
     }
 
     student.status = 'ACTIVE';
+    student.interviewStatus = 'COMPLETED';
     student.approvedBy = adminId;
     student.approvedAt = new Date();
 
-    await this.userRepository.save(student);
+    if (approvalData) {
+      if (approvalData.programId) student.programId = approvalData.programId;
+      if (approvalData.batchId) student.batchId = approvalData.batchId;
+      if (approvalData.semesterId) student.semesterId = approvalData.semesterId;
+      if (approvalData.admissionNotes) {
+        student.interviewDetails = {
+          ...(student.interviewDetails || {}),
+          admissionNotes: approvalData.admissionNotes,
+          completedAt: new Date(),
+        };
+      }
+    }
 
-    // In a real implementation, send approval email here
+    await this.userRepository.save(student);
 
     return { message: 'Student approved successfully', student };
   }
@@ -304,18 +385,21 @@ export class StudentsService {
     }
 
     student.status = 'REJECTED';
+    student.interviewStatus = 'REJECTED';
     student.rejectionReason = reason;
     student.rejectedBy = adminId;
     student.rejectedAt = new Date();
 
     await this.userRepository.save(student);
 
-    // In a real implementation, send rejection email here
-
     return { message: 'Student rejected successfully', student };
   }
 
-  async getDetailedStudentById(studentId: string, organizationId: string, facultyId?: string) {
+  async getDetailedStudentById(
+    studentId: string,
+    organizationId: string,
+    facultyId?: string,
+  ) {
     // 1. Fetch Student Profile
     const student = await this.userRepository.findOne({
       where: {
@@ -330,6 +414,9 @@ export class StudentsService {
         email: true,
         mobile: true,
         status: true,
+        ataStatus: true,
+        interviewStatus: true,
+        interviewDetails: true,
         createdAt: true,
         customProfile: true,
         regionId: true,
@@ -337,157 +424,267 @@ export class StudentsService {
     });
 
     if (!student) throw new NotFoundException('Student not found');
-    
+
     // Ensure customProfile is an object
     if (typeof (student as any).customProfile === 'string') {
       try {
-        (student as any).customProfile = JSON.parse((student as any).customProfile);
+        (student as any).customProfile = JSON.parse(
+          (student as any).customProfile,
+        );
       } catch (e) {
         (student as any).customProfile = {};
       }
     } else if (!(student as any).customProfile) {
       (student as any).customProfile = {};
     }
-    
+
     // Map region name if exists
     if ((student as any).regionId) {
       try {
         const regionRepo = this.dataSource.getRepository('Region');
-        const region = await regionRepo.findOne({ where: { id: (student as any).regionId } });
+        const region = await regionRepo.findOne({
+          where: { id: (student as any).regionId },
+        });
         if (region) {
-          (student as any).regionId = { id: region.id, name: region.name };
+          (student as any).regionId = { id: region.id, name: (region as any).name };
         }
       } catch (e) {}
     }
 
     // 2. Fetch Enrollments
     const enrollments = await this.enrollmentRepository.find({
-      where: { studentId, organizationId, status: In(['ACTIVE', 'COMPLETED']) }
+      where: {
+        studentId,
+        organizationId,
+        status: In(['ACTIVE', 'COMPLETED']),
+      },
     });
 
-    let courseIds = enrollments.map(e => e.courseId);
+    const courseIds = enrollments.map((e) => e.courseId);
     let courses: any[] = [];
-    
+
     let totalVideosMap = new Map();
     let totalExamsMap = new Map();
     let totalAssignmentsMap = new Map();
-    
+
     let completedVideosMap = new Map();
     let completedExamsMap = new Map();
     let completedAssignmentsMap = new Map();
+
+    let totalLessonsMap = new Map();
+    let completedLessonsMap = new Map();
+    let completedLessonIdsSet = new Set<string>();
 
     if (courseIds.length > 0) {
       const courseQuery = this.courseRepository
         .createQueryBuilder('course')
         .where('course.id IN (:...courseIds)', { courseIds })
-        .andWhere('course.organizationId = :organizationId', { organizationId });
+        .andWhere('course.organizationId = :organizationId', {
+          organizationId,
+        });
 
       if (facultyId) {
-        courseQuery.andWhere('course.instructorIds LIKE :facultyId', { facultyId: `%${facultyId}%` });
+        courseQuery.andWhere('course.instructorIds LIKE :facultyId', {
+          facultyId: `%${facultyId}%`,
+        });
       }
-      
+
       courses = await courseQuery.getMany();
-      
-      const filteredCourseIds = courses.map(c => c.id);
+
+      const filteredCourseIds = courses.map((c) => c.id);
       if (filteredCourseIds.length > 0) {
-        // Total non-deleted lessons per course
-        const tLessons = await this.lessonRepository.createQueryBuilder('lesson')
-          .where('lesson.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .andWhere('lesson.organizationId = :organizationId', { organizationId })
+        const tLessons = await this.lessonRepository
+          .createQueryBuilder('lesson')
+          .where('lesson.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .andWhere('lesson.organizationId = :organizationId', {
+            organizationId,
+          })
           .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false })
-          .select('lesson.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('lesson.courseId').getRawMany();
-        const totalLessonsMap = new Map(tLessons.map(l => [l.courseId, parseInt(l.count, 10)]));
+          .select('lesson.courseId', 'courseId')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('lesson.courseId')
+          .getRawMany();
+        totalLessonsMap = new Map(
+          tLessons.map((l) => [l.courseId, parseInt(l.count, 10)]),
+        );
 
-        const tVideos = await this.lessonRepository.createQueryBuilder('lesson')
-          .where('lesson.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .andWhere('lesson.organizationId = :organizationId', { organizationId })
+        const tVideos = await this.lessonRepository
+          .createQueryBuilder('lesson')
+          .where('lesson.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .andWhere('lesson.organizationId = :organizationId', {
+            organizationId,
+          })
           .andWhere('lesson.isDeleted = :isDeleted', { isDeleted: false })
-          .andWhere('(lesson.type = :type OR lesson.videoUrl IS NOT NULL)', { type: 'VIDEO' })
-          .select('lesson.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('lesson.courseId').getRawMany();
-        totalVideosMap = new Map(tVideos.map(v => [v.courseId, parseInt(v.count, 10)]));
+          .andWhere('(lesson.type = :type OR lesson.videoUrl IS NOT NULL)', {
+            type: 'VIDEO',
+          })
+          .select('lesson.courseId', 'courseId')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('lesson.courseId')
+          .getRawMany();
+        totalVideosMap = new Map(
+          tVideos.map((v) => [v.courseId, parseInt(v.count, 10)]),
+        );
 
-        const tExams = await this.examRepository.createQueryBuilder('exam')
-          .where('exam.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .andWhere('exam.organizationId = :organizationId', { organizationId })
-          .select('exam.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('exam.courseId').getRawMany();
-        totalExamsMap = new Map(tExams.map(e => [e.courseId, parseInt(e.count, 10)]));
+        const tExams = await this.examRepository
+          .createQueryBuilder('exam')
+          .where('exam.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .andWhere('exam.organizationId = :organizationId', {
+            organizationId,
+          })
+          .select('exam.courseId', 'courseId')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('exam.courseId')
+          .getRawMany();
+        totalExamsMap = new Map(
+          tExams.map((e) => [e.courseId, parseInt(e.count, 10)]),
+        );
 
-        const tAssignments = await this.assignmentRepository.createQueryBuilder('assignment')
-          .where('assignment.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .andWhere('assignment.organizationId = :organizationId', { organizationId })
-          .select('assignment.courseId', 'courseId').addSelect('COUNT(*)', 'count').groupBy('assignment.courseId').getRawMany();
-        totalAssignmentsMap = new Map(tAssignments.map(a => [a.courseId, parseInt(a.count, 10)]));
+        const tAssignments = await this.assignmentRepository
+          .createQueryBuilder('assignment')
+          .where('assignment.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .andWhere('assignment.organizationId = :organizationId', {
+            organizationId,
+          })
+          .select('assignment.courseId', 'courseId')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('assignment.courseId')
+          .getRawMany();
+        totalAssignmentsMap = new Map(
+          tAssignments.map((a) => [a.courseId, parseInt(a.count, 10)]),
+        );
 
-        // Completed lessons per course
-        const cLessons = await this.lessonProgressRepository.createQueryBuilder('lp')
+        const cLessons = await this.lessonProgressRepository
+          .createQueryBuilder('lp')
           .where('lp.studentId = :studentId', { studentId })
-          .andWhere('lp.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('lp.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
           .andWhere('lp.isCompleted = :completed', { completed: true })
           .select('lp.courseId', 'courseId')
           .addSelect('COUNT(DISTINCT lp.lessonId)', 'count')
           .groupBy('lp.courseId')
           .getRawMany();
-        const completedLessonsMap = new Map(cLessons.map(l => [l.courseId, parseInt(l.count, 10)]));
+        completedLessonsMap = new Map(
+          cLessons.map((l) => [l.courseId, parseInt(l.count, 10)]),
+        );
 
-        // Completed lesson IDs
         const allCompletedLps = await this.lessonProgressRepository.find({
-          where: { studentId, isCompleted: true }
+          where: { studentId, isCompleted: true },
         });
-        const completedLessonIdsSet = new Set(allCompletedLps.map(p => p.lessonId));
+        completedLessonIdsSet = new Set(
+          allCompletedLps.map((p) => p.lessonId),
+        );
 
-        const cVideos = await this.lessonProgressRepository.createQueryBuilder('lp')
+        const cVideos = await this.lessonProgressRepository
+          .createQueryBuilder('lp')
           .leftJoin(Lesson, 'lesson', 'lesson.id = lp.lessonId')
           .where('lp.studentId = :studentId', { studentId })
-          .andWhere('lp.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
+          .andWhere('lp.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
           .andWhere('lp.isCompleted = :completed', { completed: true })
-          .select('lp.courseId', 'courseId').addSelect('COUNT(DISTINCT lp.lessonId)', 'count').groupBy('lp.courseId').getRawMany();
-        completedVideosMap = new Map(cVideos.map(v => [v.courseId, parseInt(v.count, 10)]));
+          .select('lp.courseId', 'courseId')
+          .addSelect('COUNT(DISTINCT lp.lessonId)', 'count')
+          .groupBy('lp.courseId')
+          .getRawMany();
+        completedVideosMap = new Map(
+          cVideos.map((v) => [v.courseId, parseInt(v.count, 10)]),
+        );
 
-        const cExams = await this.attemptRepository.createQueryBuilder('attempt')
+        const cExams = await this.attemptRepository
+          .createQueryBuilder('attempt')
           .leftJoin(Exam, 'exam', 'exam.id = attempt.examId')
           .where('attempt.studentId = :studentId', { studentId })
-          .andWhere('exam.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .select('exam.courseId', 'courseId').addSelect('COUNT(DISTINCT attempt.examId)', 'count').groupBy('exam.courseId').getRawMany();
-        completedExamsMap = new Map(cExams.map(e => [e.courseId, parseInt(e.count, 10)]));
+          .andWhere('exam.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .select('exam.courseId', 'courseId')
+          .addSelect('COUNT(DISTINCT attempt.examId)', 'count')
+          .groupBy('exam.courseId')
+          .getRawMany();
+        completedExamsMap = new Map(
+          cExams.map((e) => [e.courseId, parseInt(e.count, 10)]),
+        );
 
-        const cAssignments = await this.submissionRepository.createQueryBuilder('sub')
+        const cAssignments = await this.submissionRepository
+          .createQueryBuilder('sub')
           .leftJoin(Assignment, 'assignment', 'assignment.id = sub.assignmentId')
           .where('sub.studentId = :studentId', { studentId })
-          .andWhere('assignment.courseId IN (:...filteredCourseIds)', { filteredCourseIds })
-          .select('assignment.courseId', 'courseId').addSelect('COUNT(DISTINCT sub.assignmentId)', 'count').groupBy('assignment.courseId').getRawMany();
-        completedAssignmentsMap = new Map(cAssignments.map(a => [a.courseId, parseInt(a.count, 10)]));
-
-        // Attach maps for enrollment building
-        (this as any)._tempTotalLessonsMap = totalLessonsMap;
-        (this as any)._tempCompletedLessonsMap = completedLessonsMap;
-        (this as any)._tempCompletedLessonIdsSet = completedLessonIdsSet;
+          .andWhere('assignment.courseId IN (:...filteredCourseIds)', {
+            filteredCourseIds,
+          })
+          .select('assignment.courseId', 'courseId')
+          .addSelect('COUNT(DISTINCT sub.assignmentId)', 'count')
+          .groupBy('assignment.courseId')
+          .getRawMany();
+        completedAssignmentsMap = new Map(
+          cAssignments.map((a) => [a.courseId, parseInt(a.count, 10)]),
+        );
       }
     }
 
     // Fetch Programs, Batches, Semesters for these enrollments
-    const programIds = [...new Set(enrollments.map(e => e.programId).filter(Boolean))];
-    const batchIds = [...new Set(enrollments.map(e => e.batchId).filter(Boolean))];
-    const semesterIds = [...new Set([
-      ...enrollments.map(e => e.semesterId),
-      ...courses.map((c: any) => c.semesterId)
-    ].filter(Boolean))];
+    const programIds = [
+      ...new Set(enrollments.map((e) => e.programId).filter(Boolean)),
+    ];
+    const batchIds = [
+      ...new Set(enrollments.map((e) => e.batchId).filter(Boolean)),
+    ];
+    const semesterIds = [
+      ...new Set([
+        ...enrollments.map((e) => e.semesterId),
+        ...courses.map((c: any) => c.semesterId),
+      ].filter(Boolean)),
+    ];
 
-    const programs = programIds.length > 0 ? await this.programRepository.createQueryBuilder('program').where('program.id IN (:...programIds)', { programIds }).andWhere('program.organizationId = :organizationId', { organizationId }).getMany() : [];
-    const batches = batchIds.length > 0 ? await this.batchRepository.createQueryBuilder('batch').where('batch.id IN (:...batchIds)', { batchIds }).andWhere('batch.organizationId = :organizationId', { organizationId }).getMany() : [];
-    const semesters = semesterIds.length > 0 ? await this.semesterRepository.createQueryBuilder('semester').where('semester.id IN (:...semesterIds)', { semesterIds }).andWhere('semester.organizationId = :organizationId', { organizationId }).getMany() : [];
+    const programs =
+      programIds.length > 0
+        ? await this.programRepository
+            .createQueryBuilder('program')
+            .where('program.id IN (:...programIds)', { programIds })
+            .andWhere('program.organizationId = :organizationId', {
+              organizationId,
+            })
+            .getMany()
+        : [];
+    const batches =
+      batchIds.length > 0
+        ? await this.batchRepository
+            .createQueryBuilder('batch')
+            .where('batch.id IN (:...batchIds)', { batchIds })
+            .andWhere('batch.organizationId = :organizationId', {
+              organizationId,
+            })
+            .getMany()
+        : [];
+    const semesters =
+      semesterIds.length > 0
+        ? await this.semesterRepository
+            .createQueryBuilder('semester')
+            .where('semester.id IN (:...semesterIds)', { semesterIds })
+            .andWhere('semester.organizationId = :organizationId', {
+              organizationId,
+            })
+            .getMany()
+        : [];
 
-    // Fetch offline grades â€” filtered by organizationId
-    const offlineGrades = await this.offlineGradeRepository.find({ where: { studentId, organizationId } });
+    const offlineGrades = await this.offlineGradeRepository.find({
+      where: { studentId, organizationId },
+    });
 
-    const totalLessonsMap = (this as any)._tempTotalLessonsMap || new Map();
-    const completedLessonsMap = (this as any)._tempCompletedLessonsMap || new Map();
-    const completedLessonIdsSet = (this as any)._tempCompletedLessonIdsSet || new Set();
-
-    // Filter enrollments based on courses actually found (useful if faculty filtering was applied)
     const validCourseIds = new Set(courses.map((c: any) => c.id));
     const filteredEnrollments = enrollments
-      .filter(e => validCourseIds.has(e.courseId))
-      .map(e => {
+      .filter((e) => validCourseIds.has(e.courseId))
+      .map((e) => {
         const totalL = totalLessonsMap.get(e.courseId) || 0;
         const compL = completedLessonsMap.get(e.courseId) || 0;
         const progPct = totalL > 0 ? Math.round((compL / totalL) * 100) : 0;
@@ -497,44 +694,65 @@ export class StudentsService {
           progressPercentage: progPct,
           course: courses.find((c: any) => c.id === e.courseId),
           courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
-          program: programs.find(p => p.id === e.programId) ? {
-            ...programs.find(p => p.id === e.programId),
-            expectedGraduationDate: enrollments.find(pe => pe.programId === e.programId && !pe.courseId)?.expectedGraduationDate || null
-          } : null,
-          batch: batches.find(b => b.id === e.batchId) || null,
-          semester: semesters.find(s => s.id === (e.semesterId || courses.find((c: any) => c.id === e.courseId)?.semesterId)) || null,
-          grade: offlineGrades.find(g => g.courseId === e.courseId) || null,
+          program: programs.find((p) => p.id === e.programId)
+            ? {
+                ...programs.find((p) => p.id === e.programId),
+                expectedGraduationDate:
+                  enrollments.find(
+                    (pe) => pe.programId === e.programId && !pe.courseId,
+                  )?.expectedGraduationDate || null,
+              }
+            : null,
+          batch: batches.find((b) => b.id === e.batchId) || null,
+          semester:
+            semesters.find(
+              (s) =>
+                s.id ===
+                (e.semesterId ||
+                  courses.find((c: any) => c.id === e.courseId)?.semesterId),
+            ) || null,
+          grade: offlineGrades.find((g) => g.courseId === e.courseId) || null,
           completedLessonIds: Array.from(completedLessonIdsSet),
           curriculum: {
-            videos: { total: totalVideosMap.get(e.courseId) || 0, completed: completedVideosMap.get(e.courseId) || 0 },
-            exams: { total: totalExamsMap.get(e.courseId) || 0, completed: completedExamsMap.get(e.courseId) || 0 },
-            assignments: { total: totalAssignmentsMap.get(e.courseId) || 0, completed: completedAssignmentsMap.get(e.courseId) || 0 },
-          }
+            videos: {
+              total: totalVideosMap.get(e.courseId) || 0,
+              completed: completedVideosMap.get(e.courseId) || 0,
+            },
+            exams: {
+              total: totalExamsMap.get(e.courseId) || 0,
+              completed: completedExamsMap.get(e.courseId) || 0,
+            },
+            assignments: {
+              total: totalAssignmentsMap.get(e.courseId) || 0,
+              completed: completedAssignmentsMap.get(e.courseId) || 0,
+            },
+          },
         };
       });
 
-    // 3. Fetch Exams/Attempts only for these filtered courses
     let attempts: any[] = [];
     if (validCourseIds.size > 0) {
       attempts = await this.attemptRepository.find({
-        where: { studentId, organizationId }
+        where: { studentId, organizationId },
       });
 
       if (attempts.length > 0) {
-        const examIds = attempts.map(a => a.examId);
+        const examIds = attempts.map((a) => a.examId);
         const exams = await this.examRepository
           .createQueryBuilder('exam')
           .where('exam.id IN (:...examIds)', { examIds })
-          .andWhere('exam.courseId IN (:...courseIds)', { courseIds: Array.from(validCourseIds) })
+          .andWhere('exam.courseId IN (:...courseIds)', {
+            courseIds: Array.from(validCourseIds),
+          })
           .getMany();
 
         const validExamIds = new Set(exams.map((e: any) => e.id));
-        
+
         attempts = attempts
-          .filter(a => validExamIds.has(a.examId))
+          .filter((a) => validExamIds.has(a.examId))
           .map((a: any) => ({
             ...a,
-            exam: exams.find((e: any) => e.id === a.examId)
+            exam: exams.find((e: any) => e.id === a.examId),
           }));
       }
     }
@@ -546,9 +764,7 @@ export class StudentsService {
       stats: {
         totalCourses: filteredEnrollments.length,
         totalExamsAttempted: attempts.length,
-      }
+      },
     };
   }
 }
-
-

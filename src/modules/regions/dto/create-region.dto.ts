@@ -8,4 +8,8 @@ export class CreateRegionDto {
   @IsOptional()
   @IsBoolean()
   isGlobal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isAta?: boolean;
 }

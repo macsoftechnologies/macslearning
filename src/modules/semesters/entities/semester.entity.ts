@@ -32,6 +32,24 @@ export class Semester {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'int', default: 70 })
+  passingPercentage: number;
+
+  @Column({ type: 'int', default: 55 })
+  internalWeightage: number;
+
+  @Column({ type: 'int', default: 5 })
+  attendanceWeightage: number;
+
+  @Column({ type: 'int', default: 40 })
+  finalExamWeightage: number;
+
+  @Column({ type: 'int', default: 5 })
+  totalSubjects: number;
+
+  @Column({ type: 'int', default: 25 })
+  requiredInteractions: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

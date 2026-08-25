@@ -541,6 +541,8 @@ export class AuthService {
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const ataStatus = registerDto.ataStatus === 'ATA' ? 'ATA' : (customProfile?.ataStatus === 'ATA' ? 'ATA' : 'NON_ATA');
+
     const user = this.userRepository.create({
       email,
       passwordHash,
@@ -548,15 +550,55 @@ export class AuthService {
       mobile,
       userType: 'STUDENT',
       status: 'PENDING',
+      ataStatus,
+      interviewStatus: 'PENDING',
       organizationId,
       regionId,
       customProfile: typeof customProfile === 'string' ? customProfile : JSON.stringify(customProfile || {}),
     });
 
-    await this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
 
+    // Create or link student profile
+    try {
+      const parsedProfile = typeof customProfile === 'object' ? customProfile : {};
+      const profile = this.userRepository.manager.create('StudentProfile', {
+        userId: savedUser.id,
+        countryOfCitizenship: parsedProfile.countryOfCitizenship || null,
+        countryLivingIn: parsedProfile.countryLivingIn || null,
+        photo: parsedProfile.photo || parsedProfile.documents?.photo || null,
+        gender: parsedProfile.gender || null,
+        address: parsedProfile.address || null,
+        maritalStatus: parsedProfile.maritalStatus || null,
+        dateOfBirth: parsedProfile.dateOfBirth || null,
+        motherTongue: parsedProfile.motherTongue || null,
+        otherLanguages: parsedProfile.otherLanguages || null,
+        bornAgainDate: parsedProfile.bornAgainDate || null,
+        denomination: parsedProfile.denomination || null,
+        localChurch: parsedProfile.localChurch || null,
+        honors: parsedProfile.honors || null,
+        referenceProvider: parsedProfile.referenceProvider || null,
+        churchDetails: parsedProfile.churchDetails || null,
+        parentName: parsedProfile.parentName || null,
+        parentPhone: parsedProfile.parentPhone || null,
+        parentAddress: parsedProfile.parentAddress || null,
+        baptismYear: parsedProfile.baptismYear || null,
+        currentProfession: parsedProfile.currentProfession || null,
+        highestEducation: parsedProfile.highestEducation || null,
+        theologicalQualifications: parsedProfile.theologicalQualifications || null,
+        interestedCourse: parsedProfile.interestedCourse || null,
+        christianExperience: parsedProfile.christianExperience || null,
+        theologicalDesire: parsedProfile.theologicalDesire || null,
+        howDidYouHear: parsedProfile.howDidYouHear || null,
+        hobbies: parsedProfile.hobbies || null,
+        documents: parsedProfile.documents || {},
+        declarationAccepted: !!parsedProfile.declarationAccepted,
+      });
+      await this.userRepository.manager.save(profile);
+    } catch (profileErr) {
+      console.warn('Could not auto-create StudentProfile entity:', profileErr.message);
+    }
 
-
-    return { message: 'Registration successful. Awaiting admin approval.' };
+    return { message: 'Registration successful. Awaiting interview & admin approval.' };
   }
 }

@@ -48,6 +48,15 @@ export class Organization {
   @Column({ type: 'json', nullable: true })
   subscriptionConfig: any;
 
+  @Column({ type: 'json', nullable: true })
+  zoomConfig: {
+    clientId?: string;
+    clientSecret?: string;
+    accountId?: string;
+    apiKey?: string;
+    defaultMeetingUrl?: string;
+  };
+
   /*
   @Column({
     type: 'enum',

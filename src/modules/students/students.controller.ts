@@ -121,20 +121,48 @@ export class StudentsController {
     );
   }
 
+  @Patch(':id/schedule-interview')
+  @Roles('ORG_USER')
+  async scheduleInterview(
+    @Request() req: any,
+    @Param('id') studentId: string,
+    @Body() interviewData: any,
+  ) {
+    const result = await this.studentsService.scheduleInterview(
+      studentId,
+      req.user.userId,
+      interviewData,
+      req.user.organizationId,
+    );
+    await this.auditService.createLog({
+      actorId: req.user.userId,
+      organizationId: req.user.organizationId,
+      action: 'Student Interview Scheduled',
+      targetId: studentId,
+      metadata: { interviewData },
+    });
+    return result;
+  }
+
   @Patch(':id/approve')
   @Roles('ORG_USER')
-  async approveStudent(@Request() req: any, @Param('id') studentId: string) {
+  async approveStudent(
+    @Request() req: any,
+    @Param('id') studentId: string,
+    @Body() approvalData?: any,
+  ) {
     const result = await this.studentsService.approveStudent(
       studentId,
       req.user.userId,
       req.user.organizationId,
+      approvalData,
     );
     await this.auditService.createLog({
       actorId: req.user.userId,
       organizationId: req.user.organizationId,
       action: 'Student Approved',
       targetId: result.student.id,
-      metadata: { studentId: studentId },
+      metadata: { studentId: studentId, approvalData },
     });
     return result;
   }
