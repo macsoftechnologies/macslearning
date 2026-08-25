@@ -13,18 +13,36 @@ export class SemestersService {
     private mappingRepository: Repository<ProgramCourseMapping>,
   ) {}
 
-  async findAll(organizationId: string): Promise<Semester[]> {
-    return this.semestersRepository.find({ where: { organizationId }, order: { createdAt: 'DESC' } });
+  async findAll(organizationId: string): Promise<any[]> {
+    const semesters = await this.semestersRepository.find({ where: { organizationId }, order: { createdAt: 'DESC' } });
+    const mappings = await this.mappingRepository.find({ where: { organizationId } });
+
+    return semesters.map(s => {
+      const courseIds = mappings
+        .filter(m => m.semesterId === s.id && (!s.programId || m.programId === s.programId))
+        .map(m => m.courseId);
+      return {
+        ...s,
+        courseIds,
+      };
+    });
   }
 
-  async findOne(id: string, organizationId?: string): Promise<Semester> {
+  async findOne(id: string, organizationId?: string): Promise<any> {
     const where: any = { id };
     if (organizationId) where.organizationId = organizationId;
     const semester = await this.semestersRepository.findOne({ where });
     if (!semester) {
       throw new NotFoundException(`Semester with ID ${id} not found`);
     }
-    return semester;
+    const mappings = await this.mappingRepository.find({ 
+      where: organizationId ? { organizationId, semesterId: id } : { semesterId: id } 
+    });
+    const courseIds = mappings
+      .filter(m => !semester.programId || m.programId === semester.programId)
+      .map(m => m.courseId);
+
+    return { ...semester, courseIds };
   }
 
   async create(createData: Partial<Semester> & { name?: string }): Promise<Semester> {
