@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Controller,
   Get,
@@ -62,7 +62,14 @@ export class AppController {
           '.pdf',
           '.doc',
           '.docx',
+          '.ppt',
+          '.pptx',
+          '.xls',
+          '.xlsx',
+          '.csv',
+          '.txt',
           '.zip',
+          '.rar',
         ];
         const ext = extname(file.originalname).toLowerCase();
         if (!allowed.includes(ext)) {
@@ -100,7 +107,14 @@ export class AppController {
           '.pdf',
           '.doc',
           '.docx',
+          '.ppt',
+          '.pptx',
+          '.xls',
+          '.xlsx',
+          '.csv',
+          '.txt',
           '.zip',
+          '.rar',
         ];
         const ext = extname(file.originalname).toLowerCase();
         if (!allowed.includes(ext)) {
