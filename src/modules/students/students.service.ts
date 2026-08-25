@@ -380,6 +380,36 @@ export class StudentsService {
       }
     }
 
+    // Auto-resolve batch from date if not explicitly passed
+    if (!student.batchId) {
+      const now = new Date();
+      const month = now.getMonth(); // 0 to 11
+      const year = now.getFullYear();
+      const isFirstHalf = month < 6;
+      const batchName = isFirstHalf ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
+      
+      const orgId = student.organizationId || organizationId;
+      if (orgId) {
+        let batch = await this.batchRepository.findOne({
+          where: { organizationId: orgId, name: batchName },
+        });
+        if (!batch) {
+          batch = this.batchRepository.create({
+            organizationId: orgId,
+            name: batchName,
+            degreeName: 'General Track',
+            totalSemesters: 6,
+            courseMappings: [],
+            status: 'ACTIVE',
+            startDate: new Date(year, isFirstHalf ? 0 : 6, 1),
+            endDate: new Date(year, isFirstHalf ? 5 : 11, 30),
+          });
+          await this.batchRepository.save(batch);
+        }
+        student.batchId = batch.id;
+      }
+    }
+
     await this.userRepository.save(student);
 
     return { message: 'Student approved successfully', student };
