@@ -29,8 +29,9 @@ export class RegionPriceDto {
   regionId: string;
 
   @IsNumber()
+  @IsOptional()
   @Type(() => Number)
-  price: number;
+  price?: number;
 
   @IsString()
   @IsOptional()
@@ -140,6 +141,10 @@ export class UpdateCourseDto {
   @IsString({ each: true })
   @IsOptional()
   instructorIds?: string[];
+
+  @IsString()
+  @IsOptional()
+  thumbnailUrl?: string;
 
   @IsArray()
   @IsOptional()
