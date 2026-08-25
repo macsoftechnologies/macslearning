@@ -320,6 +320,25 @@ export class StudentsService {
     return { message: 'Interview scheduled successfully', student };
   }
 
+  async confirmInterview(studentId: string) {
+    const student = await this.userRepository.findOne({
+      where: { id: studentId, userType: 'STUDENT' },
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    student.interviewStatus = 'CONFIRMED';
+    student.interviewDetails = {
+      ...(student.interviewDetails || {}),
+      studentAccepted: true,
+      confirmedAt: new Date(),
+    };
+
+    await this.userRepository.save(student);
+    return { message: 'Interview schedule confirmed successfully', student };
+  }
+
   async approveStudent(
     studentId: string,
     adminId: string,

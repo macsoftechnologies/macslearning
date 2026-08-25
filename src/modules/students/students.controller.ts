@@ -144,6 +144,15 @@ export class StudentsController {
     return result;
   }
 
+  @Patch(':id/confirm-interview')
+  async confirmInterview(
+    @Request() req: any,
+    @Param('id') studentId: string,
+  ) {
+    const targetId = (req.user?.userType === 'STUDENT') ? req.user.userId : studentId;
+    return await this.studentsService.confirmInterview(targetId);
+  }
+
   @Patch(':id/approve')
   @Roles('ORG_USER')
   async approveStudent(
