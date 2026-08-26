@@ -76,6 +76,22 @@ export class CreateOrganizationDto {
   @IsOptional()
   lastPaymentDate?: Date;
 
+  @IsOptional()
+  zoomConfig?: {
+    clientId?: string;
+    clientSecret?: string;
+    accountId?: string;
+    apiKey?: string;
+    defaultMeetingUrl?: string;
+  };
+
+  @IsOptional()
+  vimeoConfig?: {
+    clientId?: string;
+    clientSecret?: string;
+    accessToken?: string;
+  };
+
   @IsString()
   @IsOptional()
   paymentReferenceId?: string;
