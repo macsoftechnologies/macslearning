@@ -57,6 +57,13 @@ export class Organization {
     defaultMeetingUrl?: string;
   };
 
+  @Column({ type: 'json', nullable: true })
+  vimeoConfig: {
+    clientId?: string;
+    clientSecret?: string;
+    accessToken?: string;
+  };
+
   /*
   @Column({
     type: 'enum',

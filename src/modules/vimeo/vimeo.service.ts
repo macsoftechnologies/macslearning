@@ -1,16 +1,23 @@
 import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Organization } from '../organizations/entities/org.entity';
 
 @Injectable()
 export class VimeoService {
   private readonly logger = new Logger(VimeoService.name);
-  private vimeoClient: any = null;
+  private defaultVimeoClient: any = null;
 
-  constructor(private configService: ConfigService) {
-    this.initVimeo();
+  constructor(
+    private configService: ConfigService,
+    @InjectRepository(Organization)
+    private orgRepository: Repository<Organization>,
+  ) {
+    this.initDefaultVimeo();
   }
 
-  private initVimeo() {
+  private initDefaultVimeo() {
     try {
       const Vimeo = require('vimeo').Vimeo;
       const clientId = this.configService.get<string>('VIMEO_CLIENT_ID') || process.env.VIMEO_CLIENT_ID;
@@ -18,20 +25,59 @@ export class VimeoService {
       const accessToken = this.configService.get<string>('VIMEO_ACCESS_TOKEN') || process.env.VIMEO_ACCESS_TOKEN;
 
       if (clientId && clientSecret && accessToken) {
-        this.vimeoClient = new Vimeo(clientId, clientSecret, accessToken);
-        this.logger.log('Vimeo SDK initialized successfully.');
+        this.defaultVimeoClient = new Vimeo(clientId, clientSecret, accessToken);
+        this.logger.log('Default System Vimeo SDK initialized successfully.');
       } else {
-        this.logger.warn('Vimeo credentials missing. Vimeo integration will not work.');
+        this.logger.warn('Default Vimeo credentials missing in .env. Organizations must provide their own in Settings.');
       }
     } catch (e) {
-      this.logger.error('Failed to initialize Vimeo SDK', e);
+      this.logger.error('Failed to initialize default Vimeo SDK', e);
     }
   }
 
-  private vimeoRequest(options: any): Promise<any> {
+  /**
+   * Resolves the appropriate Vimeo client for a given organization.
+   * If the organization has configured its own Vimeo credentials in Settings, uses those.
+   * Otherwise, falls back to the system-wide default credentials.
+   */
+  async getVimeoClientForOrg(organizationId?: string): Promise<{ client: any; org: Organization | null }> {
+    let org: Organization | null = null;
+
+    if (organizationId) {
+      try {
+        org = await this.orgRepository.findOne({ where: { id: organizationId } });
+        if (
+          org?.vimeoConfig?.clientId?.trim() &&
+          org?.vimeoConfig?.clientSecret?.trim() &&
+          org?.vimeoConfig?.accessToken?.trim()
+        ) {
+          const Vimeo = require('vimeo').Vimeo;
+          const customClient = new Vimeo(
+            org.vimeoConfig.clientId.trim(),
+            org.vimeoConfig.clientSecret.trim(),
+            org.vimeoConfig.accessToken.trim(),
+          );
+          this.logger.log(`Using custom Vimeo credentials for organization: ${org.name || organizationId}`);
+          return { client: customClient, org };
+        }
+      } catch (err) {
+        this.logger.warn(`Could not load Vimeo settings for org ${organizationId}: ${err.message}`);
+      }
+    }
+
+    if (this.defaultVimeoClient) {
+      return { client: this.defaultVimeoClient, org };
+    }
+
+    throw new InternalServerErrorException(
+      'Vimeo credentials not configured. Please enter your Vimeo Client ID, Secret, and Access Token in Organization Settings.',
+    );
+  }
+
+  private vimeoRequest(options: any, client: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.vimeoClient) return reject(new Error('Vimeo client not initialized'));
-      this.vimeoClient.request(options, (error: any, body: any, statusCode: any, headers: any) => {
+      if (!client) return reject(new Error('Vimeo client not initialized'));
+      client.request(options, (error: any, body: any, statusCode: any, headers: any) => {
         if (error) {
           this.logger.error('Vimeo API Failure: Status ' + statusCode + ' Headers: ' + JSON.stringify(headers));
           return reject(new Error('Vimeo HTTP ' + statusCode + ': ' + error.message));
@@ -45,15 +91,15 @@ export class VimeoService {
     });
   }
 
-  async getOrCreateFolder(folderName: string): Promise<string> {
+  async getOrCreateFolder(folderName: string, client: any): Promise<string> {
     try {
       const searchRes = await this.vimeoRequest({
         method: 'GET',
         path: '/me/projects',
         query: { query: folderName }
-      });
+      }, client);
 
-      const projects = searchRes.body.data;
+      const projects = searchRes.body.data || [];
       const existing = projects.find((p: any) => p.name === folderName);
 
       if (existing) return existing.uri;
@@ -62,7 +108,7 @@ export class VimeoService {
         method: 'POST',
         path: '/me/projects',
         query: { name: folderName }
-      });
+      }, client);
 
       return createRes.body.uri;
     } catch (err) {
@@ -71,14 +117,17 @@ export class VimeoService {
     }
   }
 
-  async generateUploadTicket(fileSize: number, videoName: string, orgName: string): Promise<{ uploadLink: string, link: string, vimeoId: string }> {
-    if (!this.vimeoClient) {
-      throw new InternalServerErrorException('Vimeo client not initialized. Check .env');
-    }
+  async generateUploadTicket(
+    fileSize: number,
+    videoName: string,
+    organizationId: string,
+  ): Promise<{ uploadLink: string; link: string; vimeoId: string }> {
+    const { client, org } = await this.getVimeoClientForOrg(organizationId);
+    const folderName = org?.name || organizationId || 'Course Lectures';
 
     try {
-      // 1. Get or create org folder
-      const folderUri = await this.getOrCreateFolder(orgName);
+      // 1. Get or create org folder in this Vimeo account
+      const folderUri = await this.getOrCreateFolder(folderName, client);
 
       // 2. Create the video and get the tus upload link
       const res = await this.vimeoRequest({
@@ -87,23 +136,23 @@ export class VimeoService {
         query: {
           upload: {
             approach: 'tus',
-            size: String(fileSize)
+            size: String(fileSize),
           },
           name: videoName,
           folder_uri: folderUri,
-          privacy: { view: 'unlisted', embed: 'public' }
-        }
-      });
+          privacy: { view: 'unlisted', embed: 'public' },
+        },
+      }, client);
 
       this.logger.log('Vimeo Response Body: ' + JSON.stringify(res.body));
       const uploadLink = res.body.upload?.upload_link;
       const link = res.body.link; // e.g. https://vimeo.com/123456789
-      const vimeoId = res.body.uri.replace('/videos/', '');
+      const vimeoId = res.body.uri?.replace('/videos/', '') || '';
 
       return { uploadLink, link, vimeoId };
     } catch (err) {
       this.logger.error('Failed to generate Vimeo upload ticket', err);
-      throw new InternalServerErrorException('Failed to initialize Vimeo upload');
+      throw new InternalServerErrorException(err.message || 'Failed to initialize Vimeo upload');
     }
   }
 
@@ -267,22 +316,20 @@ export class VimeoService {
     };
   }
 
-  async getVideoTranscript(videoIdOrUrl: string) {
+  async getVideoTranscript(videoIdOrUrl: string, organizationId?: string) {
     const videoId = this.extractVimeoId(videoIdOrUrl);
     if (!videoId) {
       throw new NotFoundException('Invalid Vimeo video URL or ID provided.');
     }
 
-    if (!this.vimeoClient) {
-      throw new InternalServerErrorException('Vimeo client is not initialized. Check server .env settings.');
-    }
+    const { client } = await this.getVimeoClientForOrg(organizationId);
 
     try {
       this.logger.log(`Fetching text tracks for Vimeo Video ID: ${videoId}`);
       const tracksRes = await this.vimeoRequest({
         method: 'GET',
         path: `/videos/${videoId}/texttracks`,
-      });
+      }, client);
 
       const tracks = tracksRes?.body?.data || [];
       this.logger.log(`Found ${tracks.length} text tracks for video ${videoId}`);
