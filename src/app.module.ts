@@ -34,6 +34,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AcademicBatchesModule } from './modules/academic-batches/academic-batches.module';
 import { FormQuestionsModule } from './modules/form-questions/form-questions.module';
 import { DMinEvaluationsModule } from './modules/evaluations/dmin-evaluations.module';
+import { LiveSessionsModule } from './modules/live-sessions/live-sessions.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { DMinEvaluationsModule } from './modules/evaluations/dmin-evaluations.mo
     AcademicBatchesModule,
     FormQuestionsModule,
     DMinEvaluationsModule,
+    LiveSessionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
