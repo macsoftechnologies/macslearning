@@ -93,13 +93,21 @@ export class ContentService {
     const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
     const contentStatus = (userType === 'FACULTY' && course?.status === 'PUBLISHED') ? 'IN_REVIEW' : 'PUBLISHED';
 
+    let orderIndex = lessonData.orderIndex ?? lessonData.order;
+    if (orderIndex === undefined || orderIndex === null) {
+      const count = await this.lessonRepository.count({
+        where: { courseId, moduleId, organizationId, isDeleted: false },
+      });
+      orderIndex = count + 1;
+    }
+
     const lesson = this.lessonRepository.create({
       ...lessonData,
       organizationId,
       courseId,
       moduleId,
       contentStatus,
-      orderIndex: lessonData.orderIndex ?? lessonData.order,
+      orderIndex,
     });
     return this.lessonRepository.save(lesson);
   }
@@ -111,7 +119,7 @@ export class ContentService {
     }
     return this.lessonRepository.find({
       where: whereClause,
-      order: { orderIndex: 'ASC' },
+      order: { orderIndex: 'ASC', createdAt: 'ASC' },
     });
   }
 
