@@ -47,7 +47,7 @@ export class CreateLessonDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'])
+  @IsEnum(['VIDEO', 'PDF', 'DOCUMENT', 'TEXT', 'INTERACTIVE', 'MIXED'])
   @IsOptional()
   type?: string;
 
@@ -94,7 +94,7 @@ export class UpdateLessonDto {
   @IsOptional()
   description?: string;
 
-  @IsEnum(['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'])
+  @IsEnum(['VIDEO', 'PDF', 'DOCUMENT', 'TEXT', 'INTERACTIVE', 'MIXED'])
   @IsOptional()
   type?: string;
 

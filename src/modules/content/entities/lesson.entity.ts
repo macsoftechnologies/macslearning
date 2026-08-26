@@ -26,7 +26,7 @@ export class Lesson {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'enum', enum: ['VIDEO', 'PDF', 'TEXT', 'INTERACTIVE', 'MIXED'], default: 'MIXED' })
+  @Column({ type: 'enum', enum: ['VIDEO', 'PDF', 'DOCUMENT', 'TEXT', 'INTERACTIVE', 'MIXED'], default: 'MIXED' })
   type: string;
 
   @Column({ type: 'varchar', nullable: true })
