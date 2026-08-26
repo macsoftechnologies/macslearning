@@ -67,6 +67,22 @@ export class CreateLessonDto {
   @IsArray()
   @IsOptional()
   attachments?: any[];
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  orderIndex?: number;
+
+  @IsOptional()
+  overlayConfig?: {
+    enabled?: boolean;
+    imageUrl?: string;
+    startSecond?: number;
+    durationSeconds?: number;
+    position?: string;
+    animation?: string;
+    customText?: string;
+  };
 }
 
 export class UpdateLessonDto {
@@ -87,6 +103,11 @@ export class UpdateLessonDto {
   @IsOptional()
   order?: number;
 
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  orderIndex?: number;
+
   @IsString()
   @IsOptional()
   contentUrl?: string;
@@ -98,4 +119,15 @@ export class UpdateLessonDto {
   @IsArray()
   @IsOptional()
   attachments?: any[];
+
+  @IsOptional()
+  overlayConfig?: {
+    enabled?: boolean;
+    imageUrl?: string;
+    startSecond?: number;
+    durationSeconds?: number;
+    position?: string;
+    animation?: string;
+    customText?: string;
+  };
 }

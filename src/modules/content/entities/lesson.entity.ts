@@ -58,6 +58,17 @@ export class Lesson {
   @Column({ type: 'text', nullable: true })
   reviewNotes: string;
 
+  @Column({ type: 'json', nullable: true })
+  overlayConfig: {
+    enabled?: boolean;
+    imageUrl?: string;
+    startSecond?: number;
+    durationSeconds?: number;
+    position?: string;
+    animation?: string;
+    customText?: string;
+  };
+
   @CreateDateColumn()
   createdAt: Date;
 
