@@ -101,8 +101,11 @@ export class ContentService {
       orderIndex = count + 1;
     }
 
+    const { order, ...sanitizedData } = lessonData;
+
     const lesson = this.lessonRepository.create({
-      ...lessonData,
+      ...sanitizedData,
+      type: (lessonData.type === 'DOCUMENT' || !lessonData.type) ? 'PDF' : lessonData.type,
       organizationId,
       courseId,
       moduleId,
@@ -175,9 +178,17 @@ export class ContentService {
       updateData.contentStatus = 'IN_REVIEW';
     }
 
+    const { order, ...cleanUpdate } = updateData;
+    if (cleanUpdate.type === 'DOCUMENT') {
+      cleanUpdate.type = 'PDF';
+    }
+    if (order !== undefined && cleanUpdate.orderIndex === undefined) {
+      cleanUpdate.orderIndex = order;
+    }
+
     await this.lessonRepository.update(
       { id: lessonId, moduleId, courseId, organizationId, isDeleted: false },
-      updateData,
+      cleanUpdate,
     );
     const lesson = await this.lessonRepository.findOne({
       where: {
