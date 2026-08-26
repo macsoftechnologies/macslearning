@@ -12,6 +12,8 @@ import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { PaymentModule } from '../payment/payment.module';
 import { CoursesModule } from '../courses/courses.module';
 import { Program } from '../programs/entities/program.entity';
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
+import { StudentCyclicProgress } from '../semesters/entities/student-cyclic-progress.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
 import { RegionConfig } from '../regions/entities/region-config.entity';
@@ -26,11 +28,14 @@ import { RegionCohort } from '../academic-batches/entities/batch.entity';
       Lesson,
       LessonProgress,
       Program,
+      ProgramCourseMapping,
+      StudentCyclicProgress,
       AcademicBatch,
       Semester,
       RegionConfig,
       RegionCohort,
     ]),
+
     BullModule.registerQueue({
       name: 'enrollment',
     }),

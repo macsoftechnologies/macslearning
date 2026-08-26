@@ -21,6 +21,9 @@ import { Semester } from '../semesters/entities/semester.entity';
 import { RegionConfig } from '../regions/entities/region-config.entity';
 import { RegionCohort } from '../academic-batches/entities/batch.entity';
 
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
+import { StudentCyclicProgress } from '../semesters/entities/student-cyclic-progress.entity';
+
 @Injectable()
 export class EnrollmentService {
   constructor(
@@ -32,6 +35,10 @@ export class EnrollmentService {
     @InjectRepository(LessonProgress)
     private lessonProgressRepository: Repository<LessonProgress>,
     @InjectRepository(Program) private programRepository: Repository<Program>,
+    @InjectRepository(ProgramCourseMapping)
+    private mappingRepository: Repository<ProgramCourseMapping>,
+    @InjectRepository(StudentCyclicProgress)
+    private cyclicProgressRepository: Repository<StudentCyclicProgress>,
     @InjectRepository(AcademicBatch) private batchRepository: Repository<AcademicBatch>,
     @InjectRepository(Semester) private semesterRepository: Repository<Semester>,
     @InjectRepository(RegionConfig) private regionConfigRepository: Repository<RegionConfig>,
@@ -43,6 +50,7 @@ export class EnrollmentService {
     studentId: string,
     organizationId: string,
     courseId: string,
+
     regionId?: string,
   ) {
     const course = await this.courseRepository.findOne({
@@ -996,4 +1004,144 @@ export class EnrollmentService {
 
     return activeCohort.id;
   }
+
+  /**
+   * Returns courses available for student to buy/learn for a program.
+   * For ATA programs, strictly filters to the student's active semester courses (+ backlog courses if cycle re-opened).
+   */
+  async getMyProgramCourses(
+    studentId: string,
+    organizationId: string,
+    programId: string,
+    regionId?: string,
+  ) {
+    const program = await this.programRepository.findOne({
+      where: { id: programId, organizationId },
+    });
+    if (!program) {
+      throw new NotFoundException('Program not found');
+    }
+
+    // Check student's cyclic progress
+    let cyclicProgress = await this.cyclicProgressRepository.findOne({
+      where: { organizationId, studentId, programId },
+    });
+
+    const activeSemesterNumber = cyclicProgress?.currentSemesterNumber || 1;
+    const currentCycleRound = cyclicProgress?.currentCycleRound || 1;
+    const passedIds: string[] = cyclicProgress?.passedCourseIds ? JSON.parse(cyclicProgress.passedCourseIds) : [];
+    const backlogIds: string[] = cyclicProgress?.backlogCourseIds ? JSON.parse(cyclicProgress.backlogCourseIds) : [];
+
+    // Fetch all semesters for this program
+    const semesters = await this.semesterRepository.find({
+      where: { organizationId, programId },
+      order: { createdAt: 'ASC' },
+    });
+
+    // Identify the active semester object
+    let activeSemester = semesters[activeSemesterNumber - 1] || semesters[0] || null;
+
+    // Get mappings for all semesters
+    const allMappings = await this.mappingRepository.find({
+      where: { organizationId, programId },
+    });
+
+    // Active semester course IDs
+    const activeSemesterCourseIds = activeSemester
+      ? allMappings.filter((m) => m.semesterId === activeSemester.id).map((m) => m.courseId)
+      : [];
+
+    // If cycle round > 1 and looping back to Sem 1, allow backlog courses too
+    const allowedCourseIds = new Set<string>([...activeSemesterCourseIds]);
+    if (currentCycleRound > 1) {
+      for (const bId of backlogIds) {
+        allowedCourseIds.add(bId);
+      }
+    }
+
+    // Fetch courses
+    const allProgramCourseIds = Array.from(new Set(allMappings.map((m) => m.courseId)));
+    const allCourses = allProgramCourseIds.length > 0
+      ? await this.courseRepository.find({
+          where: { organizationId, id: In(allProgramCourseIds), status: 'PUBLISHED' },
+        })
+      : [];
+
+    // Check existing course-level active enrollments
+    const existingEnrollments = await this.enrollmentRepository.find({
+      where: { organizationId, studentId, status: 'ACTIVE' },
+    });
+    const enrolledCourseIds = new Set(existingEnrollments.map((e) => e.courseId).filter(Boolean));
+
+    const enrichedCourses = allCourses.map((course) => {
+      const isAllowedInActiveSem = allowedCourseIds.has(course.id);
+      const isPassed = passedIds.includes(course.id);
+      const isBacklog = backlogIds.includes(course.id);
+      const isEnrolled = enrolledCourseIds.has(course.id);
+
+      // Resolve regional price
+      let effectivePrice = 0;
+      let currency = 'INR';
+      if (regionId && course.regionalPrices) {
+        try {
+          let rpList = typeof course.regionalPrices === 'string' ? JSON.parse(course.regionalPrices) : course.regionalPrices;
+          const matched = rpList.find((p: any) => p.regionId === regionId || p.regionId?.id === regionId || p.regionId?._id === regionId);
+          if (matched) {
+            effectivePrice = parseFloat(matched.price || matched.amount) || 0;
+            currency = matched.currency || 'INR';
+          }
+        } catch (e) {}
+      }
+      if (!effectivePrice) {
+        effectivePrice = parseFloat((course as any).price) || (course.pricing?.amount ? parseFloat(course.pricing.amount) : 0);
+        currency = course.pricing?.currency || 'INR';
+      }
+
+
+      return {
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        thumbnailUrl: course.thumbnailUrl,
+        credits: course.credits || 3,
+        price: effectivePrice,
+        currency,
+        isAllowedInActiveSem,
+        isEnrolled,
+        isPassed,
+        isBacklog,
+        status: isPassed
+          ? 'PASSED'
+          : isEnrolled
+          ? 'ENROLLED'
+          : isBacklog
+          ? 'BACKLOG'
+          : isAllowedInActiveSem
+          ? 'AVAILABLE_TO_BUY'
+          : 'LOCKED_FUTURE_SEMESTER',
+      };
+    });
+
+    return {
+      program: {
+        id: program.id,
+        name: program.name,
+        totalSemesters: program.totalSemesters,
+        totalSubjects: program.totalSubjects,
+      },
+      activeSemester: activeSemester
+        ? {
+            id: activeSemester.id,
+            name: activeSemester.name,
+            term: activeSemester.term,
+            semesterNumber: activeSemesterNumber,
+          }
+        : null,
+      currentCycleRound,
+      isAtaTrack: true,
+      activeSemesterCourses: enrichedCourses.filter((c) => c.isAllowedInActiveSem),
+      allCourses: enrichedCourses,
+    };
+  }
 }
+

@@ -33,6 +33,7 @@ import { TranscriptsModule } from './modules/transcripts/transcripts.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AcademicBatchesModule } from './modules/academic-batches/academic-batches.module';
 import { FormQuestionsModule } from './modules/form-questions/form-questions.module';
+import { DMinEvaluationsModule } from './modules/evaluations/dmin-evaluations.module';
 
 @Module({
   imports: [
@@ -92,8 +93,10 @@ import { FormQuestionsModule } from './modules/form-questions/form-questions.mod
     TransactionsModule,
     AcademicBatchesModule,
     FormQuestionsModule,
+    DMinEvaluationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule { }
+

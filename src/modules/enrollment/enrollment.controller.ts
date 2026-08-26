@@ -52,8 +52,25 @@ export class EnrollmentController {
     );
   }
 
+  @Get('my-program-courses')
+  @Roles('STUDENT', 'ORG_USER', 'SUPER_ADMIN')
+  async getMyProgramCourses(
+    @Request() req: any,
+    @Query('programId') programId: string,
+    @Query('studentId') queryStudentId?: string,
+  ) {
+    const studentId = req.user.role === 'STUDENT' ? req.user.userId : queryStudentId || req.user.userId;
+    return this.enrollmentService.getMyProgramCourses(
+      studentId,
+      req.user.organizationId,
+      programId,
+      req.user.regionId,
+    );
+  }
+
   @Post()
   @Roles('ORG_USER')
+
   async adminEnrollStudent(
     @Request() req: any,
     @Body() enrollmentData: AdminEnrollStudentDto,

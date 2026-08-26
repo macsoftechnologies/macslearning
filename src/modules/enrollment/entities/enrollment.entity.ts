@@ -70,9 +70,13 @@ export class Enrollment {
   @Column({ type: 'enum', enum: ['PAID_IN_FULL', 'PAY_PER_COURSE'], nullable: true })
   paymentModel: string;
 
+  @Column({ type: 'int', default: 1, nullable: true })
+  currentSemesterIndex: number;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
 }
+

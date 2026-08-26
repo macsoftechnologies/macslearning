@@ -47,7 +47,7 @@ export class StudentsService {
   ) {}
 
   async getAllStudents(organizationId: string, queryDto: any) {
-    const { page = 1, limit = 10, search } = queryDto;
+    const { page = 1, limit = 10, search, track } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.userRepository
@@ -65,6 +65,18 @@ export class StudentsService {
       );
     }
 
+    if (track === 'ATA') {
+      queryBuilder.andWhere('(region.isAta = :isAta OR user.ataStatus = :ataStatus)', {
+        isAta: true,
+        ataStatus: 'ATA',
+      });
+    } else if (track === 'NON_ATA') {
+      queryBuilder.andWhere(
+        '(region.isAta = :isAta OR region.id IS NULL OR user.ataStatus = :nonAtaStatus)',
+        { isAta: false, nonAtaStatus: 'NON_ATA' },
+      );
+    }
+
     const [users, totalItems] = await queryBuilder
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
@@ -72,6 +84,7 @@ export class StudentsService {
       .getManyAndCount();
 
     const data = users.map((userEntity) => {
+      const isAtaFlag = !!((userEntity as any).region?.isAta || userEntity.ataStatus === 'ATA');
       return {
         _id: userEntity.id,
         id: userEntity.id,
@@ -79,7 +92,8 @@ export class StudentsService {
         email: userEntity.email,
         mobile: userEntity.mobile,
         status: userEntity.status,
-        ataStatus: userEntity.ataStatus || 'NON_ATA',
+        ataStatus: userEntity.ataStatus || (isAtaFlag ? 'ATA' : 'NON_ATA'),
+        isAtaStudent: isAtaFlag,
         interviewStatus: userEntity.interviewStatus || 'PENDING',
         interviewDetails: userEntity.interviewDetails || {},
         createdAt: userEntity.createdAt,
@@ -95,6 +109,7 @@ export class StudentsService {
           : null,
       };
     });
+
 
     if (data.length > 0) {
       const studentIds = data.map((s) => s.id);

@@ -250,10 +250,13 @@ export class ExamsService {
       .andWhere('attempt.status != :status', { status: 'IN_PROGRESS' })
       .getCount();
 
-    const maxAttempts = exam.maxAttempts ?? 3;
+    const maxAttempts = exam.maxAttempts !== undefined && exam.maxAttempts !== null ? exam.maxAttempts : 1;
     if (completedAttempts >= maxAttempts) {
-      throw new BadRequestException('Exam already attempted maximum times');
+      throw new BadRequestException(
+        'Single exam attempt limit reached for this semester cycle. If not passed, this subject will be queued for retake in the next cycle window.',
+      );
     }
+
 
     const attemptNumber = completedAttempts + 1;
     const attempt = this.attemptRepository.create({
@@ -374,11 +377,14 @@ export class ExamsService {
         questionId: answer.questionId,
         selectedOption: answer.selectedOption,
         textAnswer: answer.textAnswer,
+        fileUrl: answer.fileUrl,
+        fileName: answer.fileName,
         isCorrect,
         marks: answerMarks,
-        isGraded: (question.type === 'MCQ' || question.type === 'TRUE_FALSE') ? true : (isCorrect ? true : answer.isGraded),
+        isGraded: (question.type === 'MCQ' || question.type === 'TRUE_FALSE') ? true : (isCorrect ? true : (answer.isGraded || false)),
       };
     });
+
 
     const totalMarks = exam.totalMarks || 100;
     const percentage = (marksObtained / totalMarks) * 100;

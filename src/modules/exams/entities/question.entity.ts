@@ -23,13 +23,21 @@ export class Question {
   @Column({ type: 'varchar', nullable: true })
   videoUrl: string;
 
-  @Column({ type: 'enum', enum: ['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER'] })
+  @Column({
+    type: 'enum',
+    enum: ['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'BOOK_REVIEW', 'RESEARCH_PAPER'],
+  })
   type: string;
 
   @Column({ type: 'json', nullable: true })
   options: any[];
+
   @Column({ type: 'varchar', nullable: true })
   correctAnswer: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  attachmentUrl: string;
+
 
   @Column({ type: 'int' })
   marks: number;

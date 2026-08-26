@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Put, Param, Delete, Request, UseGuards, Query } from '@nestjs/common';
 import { SemestersService } from './semesters.service';
+import { SemestersRolloverService } from './semesters-rollover.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -7,13 +8,42 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Controller('semesters')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SemestersController {
-  constructor(private readonly semestersService: SemestersService) {}
+  constructor(
+    private readonly semestersService: SemestersService,
+    private readonly rolloverService: SemestersRolloverService,
+  ) {}
 
   @Get()
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
   async findAll(@Request() req: any) {
     const data = await this.semestersService.findAll(req.user.organizationId);
     return data.map(s => ({ ...s, status: s.isActive ? 'ACTIVE' : 'INACTIVE' }));
+  }
+
+  @Get(':id/summary')
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async getSummary(@Request() req: any, @Param('id') id: string) {
+    return this.rolloverService.getSemesterSummary(req.user.organizationId, id);
+  }
+
+  @Post(':id/rollover')
+  @Roles('SUPER_ADMIN', 'ORG_USER')
+  async executeRollover(@Request() req: any, @Param('id') id: string) {
+    return this.rolloverService.executeSemesterRollover(req.user.organizationId, id);
+  }
+
+  @Get('student/:studentId/cyclic-status')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
+  async getStudentCyclicStatus(
+    @Request() req: any,
+    @Param('studentId') studentId: string,
+    @Query('programId') programId: string,
+  ) {
+    return this.rolloverService.getStudentCyclicStatus(
+      req.user.organizationId,
+      studentId,
+      programId,
+    );
   }
 
   @Get(':id')
@@ -88,3 +118,4 @@ export class SemestersController {
     );
   }
 }
+
