@@ -1,8 +1,11 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Organization } from '../organizations/entities/org.entity';
+import { Lesson } from '../content/entities/lesson.entity';
+import { Course } from '../courses/entities/course.entity';
+import { CourseModule } from '../content/entities/courseModule.entity';
 
 @Injectable()
 export class VimeoService {
@@ -13,6 +16,12 @@ export class VimeoService {
     private configService: ConfigService,
     @InjectRepository(Organization)
     private orgRepository: Repository<Organization>,
+    @InjectRepository(Lesson)
+    private lessonRepo: Repository<Lesson>,
+    @InjectRepository(Course)
+    private courseRepo: Repository<Course>,
+    @InjectRepository(CourseModule)
+    private moduleRepo: Repository<CourseModule>,
   ) {
     this.initDefaultVimeo();
   }
@@ -91,7 +100,7 @@ export class VimeoService {
     });
   }
 
-  async getOrCreateFolder(folderName: string, client: any): Promise<string> {
+  async getOrCreateFolder(folderName: string, client: any): Promise<string | null> {
     try {
       const searchRes = await this.vimeoRequest({
         method: 'GET',
@@ -99,161 +108,200 @@ export class VimeoService {
         query: { query: folderName }
       }, client);
 
-      const projects = searchRes.body.data || [];
-      const existing = projects.find((p: any) => p.name === folderName);
+      const existing = (searchRes.body?.data || []).find(
+        (p: any) => p.name.toLowerCase().trim() === folderName.toLowerCase().trim()
+      );
 
-      if (existing) return existing.uri;
+      if (existing) {
+        return existing.uri.split('/').pop();
+      }
 
       const createRes = await this.vimeoRequest({
         method: 'POST',
         path: '/me/projects',
-        query: { name: folderName }
+        data: { name: folderName }
       }, client);
 
-      return createRes.body.uri;
+      return createRes.body?.uri?.split('/').pop();
+    } catch (err: any) {
+      this.logger.warn(`Folder creation failed for ${folderName}: ${err.message}`);
+      return null;
+    }
+  }
+
+  async getOrganizationFolderStorage(folderName: string, organizationId?: string): Promise<number> {
+    try {
+      const { client } = await this.getVimeoClientForOrg(organizationId);
+      const folderId = await this.getOrCreateFolder(folderName, client);
+      if (!folderId) return 0;
+
+      const res = await this.vimeoRequest({
+        method: 'GET',
+        path: `/me/projects/${folderId}/videos`,
+        query: { per_page: 100 }
+      }, client);
+
+      const videos = res.body?.data || [];
+      return videos.reduce((acc: number, v: any) => acc + (v.upload?.size || v.size || 0), 0);
+    } catch (err: any) {
+      this.logger.warn(`Storage check failed: ${err.message}`);
+      return 0;
+    }
+  }
+
+  async moveVideoToFolder(videoId: string, folderId: string, client: any) {
+    if (!folderId || !videoId) return;
+    try {
+      await this.vimeoRequest({
+        method: 'PUT',
+        path: `/me/projects/${folderId}/videos/${videoId}`
+      }, client);
+      this.logger.log(`Assigned video ${videoId} to Vimeo folder ${folderId}`);
     } catch (err) {
-      this.logger.error('Error managing Vimeo folder', err);
-      throw new InternalServerErrorException('Failed to manage Vimeo folders');
+      this.logger.warn(`Failed moving video ${videoId} to folder ${folderId}: ${err.message}`);
     }
   }
 
   async generateUploadTicket(
     fileSize: number,
     videoName: string,
-    organizationId: string,
-  ): Promise<{ uploadLink: string; link: string; vimeoId: string }> {
+    organizationId?: string
+  ): Promise<{ uploadLink: string; videoUri: string; videoId: string }> {
     const { client, org } = await this.getVimeoClientForOrg(organizationId);
-    const folderName = org?.name || organizationId || 'Course Lectures';
 
-    try {
-      // 1. Get or create org folder in this Vimeo account
-      const folderUri = await this.getOrCreateFolder(folderName, client);
-
-      // 2. Create the video and get the tus upload link
-      const res = await this.vimeoRequest({
-        method: 'POST',
-        path: '/me/videos',
-        query: {
-          upload: {
-            approach: 'tus',
-            size: String(fileSize),
-          },
-          name: videoName,
-          folder_uri: folderUri,
-          privacy: { view: 'unlisted', embed: 'public' },
-        },
-      }, client);
-
-      this.logger.log('Vimeo Response Body: ' + JSON.stringify(res.body));
-      const uploadLink = res.body.upload?.upload_link;
-      const link = res.body.link; // e.g. https://vimeo.com/123456789
-      const vimeoId = res.body.uri?.replace('/videos/', '') || '';
-
-      return { uploadLink, link, vimeoId };
-    } catch (err) {
-      this.logger.error('Failed to generate Vimeo upload ticket', err);
-      throw new InternalServerErrorException(err.message || 'Failed to initialize Vimeo upload');
-    }
-  }
-
-  async getOrganizationFolderStorage(orgName: string): Promise<number> { return 0; }
-  async deleteLocalVideo(filename: string): Promise<{ deleted: boolean; filename: string }> { return { deleted: true, filename }; }
-
-  extractVimeoId(input: string): string | null {
-    if (!input) return null;
-    const str = input.trim();
-    if (/^\d+$/.test(str)) return str;
-    const match = str.match(/(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)(\d+)/);
-    return match ? match[1] : null;
-  }
-
-  private parseTimestampToSeconds(ts: string): number {
-    const parts = ts.trim().split(':');
-    if (parts.length === 3) {
-      const hours = parseFloat(parts[0]) || 0;
-      const minutes = parseFloat(parts[1]) || 0;
-      const seconds = parseFloat(parts[2]) || 0;
-      return Math.floor(hours * 3600 + minutes * 60 + seconds);
-    } else if (parts.length === 2) {
-      const minutes = parseFloat(parts[0]) || 0;
-      const seconds = parseFloat(parts[1]) || 0;
-      return Math.floor(minutes * 60 + seconds);
-    }
-    return 0;
-  }
-
-  private formatSecondsToDisplay(seconds: number): string {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    const hrs = Math.floor(mins / 60);
-    if (hrs > 0) {
-      const remMins = mins % 60;
-      return `${hrs}:${remMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  private decodeHtmlEntities(text: string): string {
-    return text
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')
+    const folderName = (org?.name || 'Default Organization')
+      .replace(/[^a-zA-Z0-9 _-]/g, '')
       .trim();
+
+    return new Promise((resolve, reject) => {
+      client.request(
+        {
+          method: 'POST',
+          path: '/me/videos',
+          data: {
+            upload: {
+              approach: 'tus',
+              size: fileSize,
+            },
+            name: videoName || 'Untitled Lesson Video',
+            privacy: {
+              view: 'anybody',
+              embed: 'public',
+            },
+          },
+        },
+        async (error: any, body: any, statusCode: number) => {
+          if (error || statusCode >= 400) {
+            this.logger.error('Failed to create Vimeo upload ticket', error || body);
+            return reject(
+              new InternalServerErrorException(
+                `Vimeo ticket error (${statusCode}): ${error?.message || JSON.stringify(body)}`
+              )
+            );
+          }
+
+          const uploadLink = body.upload?.upload_link;
+          const videoUri = body.uri;
+          const videoId = videoUri ? videoUri.split('/').pop() : null;
+
+          if (!uploadLink || !videoUri) {
+            return reject(
+              new InternalServerErrorException('Vimeo did not return a valid TUS upload link.')
+            );
+          }
+
+          if (folderName && videoId) {
+            this.getOrCreateFolder(folderName, client)
+              .then((folderId) => {
+                if (folderId) {
+                  return this.moveVideoToFolder(videoId, folderId, client);
+                }
+              })
+              .catch((err) =>
+                this.logger.warn(`Async folder sorting failed: ${err.message}`)
+              );
+          }
+
+          resolve({ uploadLink, videoUri, videoId });
+        }
+      );
+    });
   }
 
-  private parseWebVTT(vttContent: string) {
-    const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-    const cues: Array<{
-      id: string;
-      start: string;
-      end: string;
+  /**
+   * Helper to extract numerical Vimeo ID from full URLs or ID strings
+   */
+  private extractVimeoId(input: string): string | null {
+    if (!input) return null;
+    const clean = input.trim();
+    // Check if directly a number
+    if (/^\d+$/.test(clean)) return clean;
+
+    // Handle vimeo.com/123456789 or player.vimeo.com/video/123456789 or vimeo.com/123456789/hash
+    const match = clean.match(/(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)(\d+)/);
+    if (match && match[1]) return match[1];
+
+    // Fallback: extract first digit sequence of length >= 6
+    const digitMatch = clean.match(/(\d{6,})/);
+    return digitMatch ? digitMatch[1] : null;
+  }
+
+  /**
+   * Helper to parse WebVTT text into structured cues, paragraphs and full text
+   */
+  private parseWebVTT(vttContent: string): {
+    totalParagraphs: number;
+    totalCues: number;
+    fullText: string;
+    paragraphs: Array<{
       startSeconds: number;
       endSeconds: number;
       displayTime: string;
       text: string;
-    }> = [];
-
+    }>;
+    sentences: Array<{
+      startSeconds: number;
+      endSeconds: number;
+      displayTime: string;
+      text: string;
+    }>;
+    cues: Array<{
+      startSeconds: number;
+      endSeconds: number;
+      displayTime: string;
+      text: string;
+    }>;
+  } {
+    const lines = vttContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const cues: Array<{ startSeconds: number; endSeconds: number; displayTime: string; text: string }> = [];
+    
     let i = 0;
-    let cueIndex = 1;
-
     while (i < lines.length) {
       const line = lines[i].trim();
-      if (line.includes('-->')) {
-        const parts = line.split('-->');
-        const startRaw = parts[0].trim().split(' ')[0];
-        const endRaw = parts[1].trim().split(' ')[0];
-
-        const startSeconds = this.parseTimestampToSeconds(startRaw);
-        const endSeconds = this.parseTimestampToSeconds(endRaw);
-        const displayTime = this.formatSecondsToDisplay(startSeconds);
+      
+      // Look for timestamp line: 00:00:01.000 --> 00:00:04.000
+      const timeMatch = line.match(/((?:\d{2}:)?\d{2}:\d{2}[\.,]\d{2,3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}[\.,]\d{2,3})/);
+      if (timeMatch) {
+        const startSec = this.parseVttTimeToSeconds(timeMatch[1]);
+        const endSec = this.parseVttTimeToSeconds(timeMatch[2]);
+        const displayTime = this.formatSecondsToDisplay(startSec);
 
         i++;
         const textLines: string[] = [];
-        while (i < lines.length && lines[i].trim() !== '' && !lines[i].includes('-->')) {
-          const cleanLine = lines[i].replace(/<[^>]+>/g, '').trim();
-          if (cleanLine) {
-            textLines.push(cleanLine);
-          }
+        while (i < lines.length && lines[i].trim() !== '') {
+          // Strip any VTT tags like <v Voice> or <b>
+          const cleaned = lines[i].replace(/<[^>]+>/g, '').trim();
+          if (cleaned) textLines.push(cleaned);
           i++;
         }
 
-        const rawText = textLines.join(' ');
-        const text = this.decodeHtmlEntities(rawText);
-
-        if (text) {
+        const cueText = textLines.join(' ');
+        if (cueText) {
           cues.push({
-            id: `cue-${cueIndex++}`,
-            start: startRaw,
-            end: endRaw,
-            startSeconds,
-            endSeconds,
+            startSeconds: startSec,
+            endSeconds: endSec,
             displayTime,
-            text,
+            text: cueText,
           });
         }
       } else {
@@ -261,48 +309,44 @@ export class VimeoService {
       }
     }
 
-    // Group cues into complete paragraphs (matching Vimeo's transcript block view)
-    const paragraphs: Array<{
-      id: string;
-      startSeconds: number;
-      endSeconds: number;
-      displayTime: string;
-      text: string;
-    }> = [];
-
+    // Group cues into natural readable paragraphs (every ~30-45 seconds or 3-4 cues)
+    const paragraphs: Array<{ startSeconds: number; endSeconds: number; displayTime: string; text: string }> = [];
     let currentPara = '';
     let paraStartSeconds = 0;
     let paraEndSeconds = 0;
-    let paraIndex = 1;
+    let cueCountInPara = 0;
 
-    for (let j = 0; j < cues.length; j++) {
-      const cue = cues[j];
-      if (!currentPara) {
+    for (let c = 0; c < cues.length; c++) {
+      const cue = cues[c];
+      if (cueCountInPara === 0) {
         paraStartSeconds = cue.startSeconds;
       }
-
-      currentPara = currentPara ? `${currentPara} ${cue.text}` : cue.text;
+      currentPara += (currentPara ? ' ' : '') + cue.text;
       paraEndSeconds = cue.endSeconds;
+      cueCountInPara++;
 
-      const wordsCount = currentPara.trim().split(/\s+/).length;
-      const duration = paraEndSeconds - paraStartSeconds;
-      const nextCue = cues[j + 1];
-      const hasPauseAfter = nextCue ? (nextCue.startSeconds - cue.endSeconds > 1.8) : true;
-      const isSentenceEnd = /[.?!]$/.test(cue.text.trim());
+      const isLongEnough = (paraEndSeconds - paraStartSeconds) >= 30 || cueCountInPara >= 4;
+      const endsWithSentence = /[.!?]$/.test(cue.text.trim());
 
-      // Vimeo-style paragraph grouping: combines short questions + following sentences until ~25-35 words or pause
-      const shouldBreak = (isSentenceEnd && (wordsCount >= 22 || duration >= 14 || hasPauseAfter)) || (wordsCount >= 40) || j === cues.length - 1;
-
-      if (shouldBreak) {
+      if ((isLongEnough && endsWithSentence) || c === cues.length - 1) {
         paragraphs.push({
-          id: `para-${paraIndex++}`,
           startSeconds: paraStartSeconds,
           endSeconds: paraEndSeconds,
           displayTime: this.formatSecondsToDisplay(paraStartSeconds),
           text: currentPara.trim(),
         });
         currentPara = '';
+        cueCountInPara = 0;
       }
+    }
+
+    if (currentPara.trim()) {
+      paragraphs.push({
+        startSeconds: paraStartSeconds,
+        endSeconds: paraEndSeconds,
+        displayTime: this.formatSecondsToDisplay(paraStartSeconds),
+        text: currentPara.trim(),
+      });
     }
 
     const fullText = cues.map(c => c.text).join(' ');
@@ -316,8 +360,113 @@ export class VimeoService {
     };
   }
 
+  private parseVttTimeToSeconds(timeStr: string): number {
+    const parts = timeStr.replace(',', '.').split(':');
+    if (parts.length === 3) {
+      return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+    } else if (parts.length === 2) {
+      return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+    }
+    return parseFloat(timeStr) || 0;
+  }
+
+  private formatSecondsToDisplay(sec: number): string {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  /**
+   * Batch fetch all lesson transcripts for an entire course in one single call.
+   */
+  async getCourseTranscripts(courseId: string, organizationId?: string) {
+    if (!courseId) {
+      throw new BadRequestException('courseId query parameter is required.');
+    }
+
+    const course = await this.courseRepo.findOne({
+      where: organizationId ? { id: courseId, organizationId } : { id: courseId },
+    });
+    if (!course) {
+      throw new NotFoundException('Course not found.');
+    }
+
+    const modules = await this.moduleRepo.find({
+      where: organizationId ? { courseId, organizationId } : { courseId },
+      order: { orderIndex: 'ASC' },
+    });
+    const moduleMap = new Map(modules.map((m) => [m.id, m.title]));
+
+    const lessons = await this.lessonRepo.find({
+      where: organizationId
+        ? { courseId, organizationId, isDeleted: false }
+        : { courseId, isDeleted: false },
+      order: { orderIndex: 'ASC', createdAt: 'ASC' },
+    });
+
+    const resolvedOrgId = organizationId || course.organizationId;
+
+    const results = [];
+    for (const lesson of lessons) {
+      const vUrl = lesson.videoUrl || lesson.contentUrl || '';
+      const vimeoId = this.extractVimeoId(vUrl);
+
+      let transcriptData: any = null;
+      let hasTranscript = false;
+
+      if (vimeoId) {
+        try {
+          const res = await this.getVideoTranscript(vUrl, resolvedOrgId);
+          if (res && res.available) {
+            hasTranscript = true;
+            transcriptData = res;
+          } else {
+            transcriptData = { available: false, message: res?.message || 'Transcript not available' };
+          }
+        } catch (e: any) {
+          transcriptData = { available: false, message: e.message };
+        }
+      } else {
+        transcriptData = { available: false, message: 'No Vimeo video attached to this lesson' };
+      }
+
+      results.push({
+        lessonId: lesson.id,
+        moduleId: lesson.moduleId,
+        moduleTitle: moduleMap.get(lesson.moduleId) || 'Module',
+        lessonTitle: lesson.title,
+        orderIndex: lesson.orderIndex || 0,
+        durationMinutes: lesson.durationMinutes || 0,
+        videoUrl: vUrl,
+        vimeoId: vimeoId || null,
+        hasTranscript,
+        transcript: transcriptData,
+      });
+    }
+
+    return {
+      success: true,
+      courseId: course.id,
+      courseTitle: course.title,
+      totalLessons: results.length,
+      totalWithTranscripts: results.filter((r) => r.hasTranscript).length,
+      lessons: results,
+    };
+  }
+
   async getVideoTranscript(videoIdOrUrl: string, organizationId?: string) {
-    const videoId = this.extractVimeoId(videoIdOrUrl);
+    let target = videoIdOrUrl;
+    if (target && !target.includes('vimeo.com') && isNaN(Number(target))) {
+      try {
+        const lesson = await this.lessonRepo.findOne({ where: { id: target } });
+        if (lesson && (lesson.videoUrl || lesson.contentUrl)) {
+          target = lesson.videoUrl || lesson.contentUrl;
+          if (!organizationId) organizationId = lesson.organizationId;
+        }
+      } catch (e) {}
+    }
+
+    const videoId = this.extractVimeoId(target);
     if (!videoId) {
       throw new NotFoundException('Invalid Vimeo video URL or ID provided.');
     }
@@ -387,4 +536,3 @@ export class VimeoService {
     }
   }
 }
-
