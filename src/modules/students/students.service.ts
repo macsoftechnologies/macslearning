@@ -443,7 +443,8 @@ export class StudentsService {
           batch = this.batchRepository.create({
             organizationId: orgId,
             name: batchName,
-            degreeName: program?.name || 'General Track',
+            programId: program?.id || student.programId || undefined,
+            degreeName: program?.name || 'All Programs (Shared Intake)',
             totalSemesters: program?.totalSemesters || 6,
             courseMappings: [],
             status: 'ACTIVE',
