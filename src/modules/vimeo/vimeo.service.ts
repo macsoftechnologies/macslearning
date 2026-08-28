@@ -182,6 +182,18 @@ export class VimeoService {
     organizationId?: string,
   ): Promise<{ uploadLink: string; link: string; vimeoId: string }> {
     const { client, org } = await this.getVimeoClientForOrg(organizationId);
+    
+    let token = (org?.vimeoConfig?.accessToken || '').trim();
+    if (!token && typeof org?.vimeoConfig === 'string') {
+      try {
+        const parsed = JSON.parse(org.vimeoConfig);
+        token = (parsed?.accessToken || '').trim();
+      } catch (e) {}
+    }
+    if (!token) {
+      token = (this.configService.get<string>('VIMEO_ACCESS_TOKEN') || process.env.VIMEO_ACCESS_TOKEN || '').trim();
+    }
+
     const folderName = (org?.name || 'Default Organization')
       .replace(/[^a-zA-Z0-9 _-]/g, '')
       .trim();
@@ -191,12 +203,12 @@ export class VimeoService {
       let folderUri: string | null = null;
       try {
         folderUri = await this.getOrCreateFolder(folderName, client);
-      } catch (fErr) {
+      } catch (fErr: any) {
         this.logger.warn(`Folder creation skipped: ${fErr.message}`);
       }
 
-      // 2. Create the video and get the tus upload link
-      const uploadParams: any = {
+      // 2. Prepare upload payload for Vimeo API
+      const uploadPayload: any = {
         upload: {
           approach: 'tus',
           size: String(fileSize),
@@ -206,17 +218,49 @@ export class VimeoService {
       };
 
       if (folderUri) {
-        uploadParams.folder_uri = folderUri.startsWith('/projects/') ? folderUri : `/projects/${folderUri}`;
+        uploadPayload.folder_uri = folderUri.startsWith('/projects/') ? folderUri : `/projects/${folderUri}`;
       }
 
-      const requestOptions: any = {
+      // 3. Perform direct HTTPS request to Vimeo API with exact JSON body
+      if (token) {
+        try {
+          const fetchRes = await fetch('https://api.vimeo.com/me/videos', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/vnd.vimeo.*+json;version=3.4',
+            },
+            body: JSON.stringify(uploadPayload),
+          });
+
+          const fetchJson: any = await fetchRes.json();
+          if (fetchRes.ok && fetchJson?.upload?.upload_link) {
+            const uploadLink = fetchJson.upload.upload_link;
+            const link = fetchJson.link || (fetchJson.uri ? `https://vimeo.com/${fetchJson.uri.replace('/videos/', '')}` : '');
+            const vimeoId = fetchJson.uri?.replace('/videos/', '') || '';
+            this.logger.log(`Generated Vimeo upload ticket successfully via direct API for ${videoName} (ID: ${vimeoId})`);
+            return { uploadLink, link, vimeoId };
+          } else if (!fetchRes.ok) {
+            const errMsg = fetchJson?.error || fetchJson?.developer_message || JSON.stringify(fetchJson);
+            this.logger.error(`Vimeo direct API returned ${fetchRes.status}: ${errMsg}`);
+            throw new Error(`Vimeo API Error ${fetchRes.status}: ${errMsg}`);
+          }
+        } catch (fetchErr: any) {
+          this.logger.warn(`Direct API fetch failed: ${fetchErr.message}. Trying SDK fallback...`);
+        }
+      }
+
+      // 4. SDK Fallback with explicit Content-Type header and query
+      const res = await this.vimeoRequest({
         method: 'POST',
         path: '/me/videos',
-        params: uploadParams,
-        data: uploadParams,
-      };
-
-      const res = await this.vimeoRequest(requestOptions, client);
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.vimeo.*+json;version=3.4',
+        },
+        query: uploadPayload,
+      }, client);
 
       const uploadLink = res.body?.upload?.upload_link;
       const link = res.body?.link || (res.body?.uri ? `https://vimeo.com/${res.body.uri.replace('/videos/', '')}` : '');
