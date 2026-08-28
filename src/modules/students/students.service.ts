@@ -436,30 +436,26 @@ export class StudentsService {
         batchName = isFirstHalf ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
       }
 
-      // Calculate exact start and end dates for the cohort
+      // Calculate start date based on intake range, and end date based on full program duration (e.g. 3 to 5 years)
+      const durationYears = program?.maxDurationYears || (program?.totalSemesters ? Math.ceil(program.totalSemesters / 2) : 3);
+      
       let batchStartDate = new Date(year, currentMonth < 6 ? 0 : 6, 1);
-      let batchEndDate = new Date(year, currentMonth < 6 ? 5 : 11, currentMonth < 6 ? 30 : 31);
 
       if (matchedRangeObj) {
         const sM = monthNames.indexOf(matchedRangeObj.startMonth);
-        const eM = monthNames.indexOf(matchedRangeObj.endMonth);
         const sD = parseInt(matchedRangeObj.startDate || '1') || 1;
-        const eD = parseInt(matchedRangeObj.endDate || '30') || 30;
 
-        if (sM !== -1 && eM !== -1) {
-          if (sM <= eM) {
-            batchStartDate = new Date(year, sM, sD);
-            batchEndDate = new Date(year, eM, eD);
-          } else {
-            // Crosses calendar year (e.g. Sep to Mar)
-            const isAfterStart = currentMonth >= sM;
-            const startYear = isAfterStart ? year : year - 1;
-            const endYear = isAfterStart ? year + 1 : year;
-            batchStartDate = new Date(startYear, sM, sD);
-            batchEndDate = new Date(endYear, eM, eD);
-          }
+        if (sM !== -1) {
+          const isAfterStart = currentMonth >= sM;
+          const startYear = isAfterStart ? year : year - 1;
+          batchStartDate = new Date(startYear, sM, sD);
         }
       }
+
+      // End date matches full multi-year degree validity
+      const batchEndDate = new Date(batchStartDate);
+      batchEndDate.setFullYear(batchEndDate.getFullYear() + durationYears);
+      batchEndDate.setDate(batchEndDate.getDate() - 1);
 
       const orgId = student.organizationId || organizationId;
       if (orgId) {
