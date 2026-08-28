@@ -395,24 +395,26 @@ export class StudentsService {
       }
     }
 
-    // Auto-resolve batch from program region cohort rules or date
+    // Auto-resolve batch and exact dates from program region cohort rules
     if (!student.batchId || (approvalData?.batchId && approvalData.batchId.startsWith('auto:'))) {
       const program = student.programId ? await this.programRepository.findOne({ where: { id: student.programId } }) : null;
       let batchName = '';
+      let matchedRangeObj: any = null;
 
       if (approvalData?.batchId && approvalData.batchId.startsWith('auto:')) {
         batchName = approvalData.batchId.replace('auto:', '').replace('(Auto)', '').trim();
       }
 
-      if (!batchName && program?.regionConfigs?.length) {
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const year = now.getFullYear();
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+      if (program?.regionConfigs?.length) {
         const rcList = Array.isArray(program.regionConfigs) ? program.regionConfigs : [];
         const matchedRc = rcList.find((c: any) => c.hasFixedBatches && c.batchDateRanges?.length > 0) || rcList[0];
 
         if (matchedRc?.hasFixedBatches && matchedRc?.batchDateRanges?.length) {
-          const now = new Date();
-          const currentMonth = now.getMonth();
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-          
           let matched = matchedRc.batchDateRanges.find((range: any) => {
             const sM = monthNames.indexOf(range.startMonth);
             const eM = monthNames.indexOf(range.endMonth);
@@ -421,17 +423,42 @@ export class StudentsService {
             return currentMonth >= sM || currentMonth <= eM;
           });
           if (!matched) matched = matchedRc.batchDateRanges[0];
+          matchedRangeObj = matched;
 
-          if (matched) {
-            batchName = `${matched.startMonth.slice(0, 3)} - ${matched.endMonth.slice(0, 3)} ${now.getFullYear()} Batch`;
+          if (!batchName && matched) {
+            batchName = `${matched.startMonth.slice(0, 3)} - ${matched.endMonth.slice(0, 3)} ${year} Batch`;
           }
         }
       }
 
       if (!batchName) {
-        const now = new Date();
-        const year = now.getFullYear();
-        batchName = now.getMonth() < 6 ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
+        const isFirstHalf = currentMonth < 6;
+        batchName = isFirstHalf ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
+      }
+
+      // Calculate exact start and end dates for the cohort
+      let batchStartDate = new Date(year, currentMonth < 6 ? 0 : 6, 1);
+      let batchEndDate = new Date(year, currentMonth < 6 ? 5 : 11, currentMonth < 6 ? 30 : 31);
+
+      if (matchedRangeObj) {
+        const sM = monthNames.indexOf(matchedRangeObj.startMonth);
+        const eM = monthNames.indexOf(matchedRangeObj.endMonth);
+        const sD = parseInt(matchedRangeObj.startDate || '1') || 1;
+        const eD = parseInt(matchedRangeObj.endDate || '30') || 30;
+
+        if (sM !== -1 && eM !== -1) {
+          if (sM <= eM) {
+            batchStartDate = new Date(year, sM, sD);
+            batchEndDate = new Date(year, eM, eD);
+          } else {
+            // Crosses calendar year (e.g. Sep to Mar)
+            const isAfterStart = currentMonth >= sM;
+            const startYear = isAfterStart ? year : year - 1;
+            const endYear = isAfterStart ? year + 1 : year;
+            batchStartDate = new Date(startYear, sM, sD);
+            batchEndDate = new Date(endYear, eM, eD);
+          }
+        }
       }
 
       const orgId = student.organizationId || organizationId;
@@ -448,10 +475,17 @@ export class StudentsService {
             totalSemesters: program?.totalSemesters || 6,
             courseMappings: [],
             status: 'ACTIVE',
-            startDate: new Date(),
-            endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+            startDate: batchStartDate,
+            endDate: batchEndDate,
           });
           await this.batchRepository.save(batch);
+        } else {
+          // Keep dates accurate if placeholder existed
+          if (matchedRangeObj && (!batch.startDate || !batch.endDate || batch.endDate.getFullYear() - batch.startDate.getFullYear() > 1)) {
+            batch.startDate = batchStartDate;
+            batch.endDate = batchEndDate;
+            await this.batchRepository.save(batch);
+          }
         }
         student.batchId = batch.id;
       }
