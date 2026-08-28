@@ -625,20 +625,24 @@ export class ContentService {
 
   async getLessonAiData(courseId: string, lessonId: string, organizationId: string) {
     const lesson = await this.lessonRepository.findOne({
-      where: { id: lessonId, courseId, organizationId },
+      where: [
+        { id: lessonId, courseId, organizationId },
+        { id: lessonId, courseId },
+        { id: lessonId }
+      ],
     });
     if (!lesson) {
       throw new NotFoundException('Lesson not found');
     }
 
-    const videoUrl = lesson.videoUrl || '';
+    const videoUrl = (lesson.videoUrl || lesson.contentUrl || '').trim();
     let vimeoId = '';
     let hash = '';
 
-    const matchWithHash = videoUrl.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/|\?h=)([a-zA-Z0-9]+)/);
-    if (matchWithHash) {
-      vimeoId = matchWithHash[1];
-      hash = matchWithHash[2];
+    const matchWithSlash = videoUrl.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/|\?h=)([a-zA-Z0-9]+)/);
+    if (matchWithSlash) {
+      vimeoId = matchWithSlash[1];
+      hash = matchWithSlash[2];
     } else {
       const matchOnlyNum = videoUrl.match(/(\d{6,})/);
       if (matchOnlyNum) {
@@ -652,26 +656,37 @@ export class ContentService {
 
     const fs = require('fs');
     const path = require('path');
-    const basePath = path.resolve(process.cwd(), 'public/uploads/aijsonfiles');
+    
+    // Multiple potential base directories to ensure compatibility across pm2, docker, local, or subfolders
+    const possibleBasePaths = [
+      path.resolve(process.cwd(), 'public/uploads/aijsonfiles'),
+      path.resolve(process.cwd(), '../public/uploads/aijsonfiles'),
+      path.resolve(__dirname, '../../../../public/uploads/aijsonfiles'),
+      path.resolve(__dirname, '../../../public/uploads/aijsonfiles'),
+      path.resolve('/var/www/backend/public/uploads/aijsonfiles'),
+      path.resolve('/app/public/uploads/aijsonfiles')
+    ];
 
     let matchedFilePath: string | null = null;
 
-    // Strategy 1: check course directory
-    const courseDir = path.join(basePath, courseId);
-    if (fs.existsSync(courseDir)) {
-      const files = fs.readdirSync(courseDir);
-      if (vimeoId && hash) {
-        const found = files.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
-        if (found) matchedFilePath = path.join(courseDir, found);
-      }
-      if (!matchedFilePath && vimeoId) {
-        const found = files.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
-        if (found) matchedFilePath = path.join(courseDir, found);
-      }
-    }
+    for (const basePath of possibleBasePaths) {
+      if (!fs.existsSync(basePath)) continue;
 
-    // Strategy 2: search across any subdirectories in aijsonfiles
-    if (!matchedFilePath && fs.existsSync(basePath)) {
+      // 1. Check course-specific folder
+      const courseDir = path.join(basePath, courseId);
+      if (fs.existsSync(courseDir)) {
+        const files = fs.readdirSync(courseDir);
+        if (vimeoId && hash) {
+          const found = files.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
+          if (found) { matchedFilePath = path.join(courseDir, found); break; }
+        }
+        if (vimeoId) {
+          const found = files.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
+          if (found) { matchedFilePath = path.join(courseDir, found); break; }
+        }
+      }
+
+      // 2. Check all subdirectories in aijsonfiles
       const allDirs = fs.readdirSync(basePath);
       for (const d of allDirs) {
         const fullDir = path.join(basePath, d);
@@ -679,29 +694,23 @@ export class ContentService {
           const subFiles = fs.readdirSync(fullDir);
           if (vimeoId && hash) {
             const found = subFiles.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
-            if (found) {
-              matchedFilePath = path.join(fullDir, found);
-              break;
-            }
+            if (found) { matchedFilePath = path.join(fullDir, found); break; }
           }
-          if (!matchedFilePath && vimeoId) {
+          if (vimeoId) {
             const found = subFiles.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
-            if (found) {
-              matchedFilePath = path.join(fullDir, found);
-              break;
-            }
+            if (found) { matchedFilePath = path.join(fullDir, found); break; }
           }
         }
       }
-    }
+      if (matchedFilePath) break;
 
-    // Strategy 3: direct json files in root aijsonfiles
-    if (!matchedFilePath && fs.existsSync(basePath)) {
+      // 3. Direct files in root of aijsonfiles
       const rootFiles = fs.readdirSync(basePath).filter((f: string) => f.endsWith('.json'));
       if (vimeoId) {
         const found = rootFiles.find((f: string) => f.includes(vimeoId));
-        if (found) matchedFilePath = path.join(basePath, found);
+        if (found) { matchedFilePath = path.join(basePath, found); break; }
       }
+      if (matchedFilePath) break;
     }
 
     if (matchedFilePath && fs.existsSync(matchedFilePath)) {
@@ -711,6 +720,7 @@ export class ContentService {
         return {
           success: true,
           found: true,
+          matchedFile: path.basename(matchedFilePath),
           data: {
             summary: parsed.summary || '',
             quiz_pool: Array.isArray(parsed.quiz_pool) ? parsed.quiz_pool : [],
@@ -726,6 +736,7 @@ export class ContentService {
     return {
       success: true,
       found: false,
+      debug: { vimeoId, hash, videoUrl, searchedPaths: possibleBasePaths.filter(p => fs.existsSync(p)) },
       data: {
         summary: lesson.description || 'Lesson concepts and key principles for academic review.',
         quiz_pool: [],
