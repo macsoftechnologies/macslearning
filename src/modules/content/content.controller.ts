@@ -399,6 +399,24 @@ export class ContentController {
       courseId,
       lessonId,
       req.user.organizationId,
+      req.user.userId || req.user._id,
+    );
+  }
+
+  @Post('lessons/:lessonId/ai-quiz/submit')
+  @Roles('STUDENT')
+  async submitLessonAiQuiz(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string,
+    @Body() body: any,
+  ) {
+    return this.contentService.submitLessonAiQuiz(
+      courseId,
+      lessonId,
+      req.user.organizationId,
+      req.user.userId || req.user._id,
+      body,
     );
   }
 }
