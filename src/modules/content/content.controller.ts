@@ -419,4 +419,15 @@ export class ContentController {
       body,
     );
   }
+  @Post('ai-data/bulk-sync')
+  @Roles('ORG_USER', 'SUPER_ADMIN', 'FACULTY')
+  async bulkSyncCourseAiData(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.contentService.bulkSyncCourseAiData(
+      courseId,
+      req.user.organizationId,
+    );
+  }
 }

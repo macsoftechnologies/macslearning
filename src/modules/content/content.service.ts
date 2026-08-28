@@ -850,4 +850,123 @@ export class ContentService {
       answers: detailedResults,
     };
   }
+
+  async bulkSyncCourseAiData(courseId: string, organizationId: string) {
+    const lessons = await this.lessonRepository.find({
+      where: [
+        { courseId, organizationId, isDeleted: false },
+        { courseId, isDeleted: false },
+      ],
+    });
+
+    const fs = require('fs');
+    const path = require('path');
+    const possibleBasePaths = [
+      path.resolve(process.cwd(), 'public/uploads/aijsonfiles'),
+      path.resolve(process.cwd(), '../public/uploads/aijsonfiles'),
+      path.resolve(__dirname, '../../../../public/uploads/aijsonfiles'),
+      path.resolve(__dirname, '../../../public/uploads/aijsonfiles'),
+      path.resolve('/var/www/backend/public/uploads/aijsonfiles'),
+      path.resolve('/app/public/uploads/aijsonfiles')
+    ];
+
+    let syncedCount = 0;
+    const results: any[] = [];
+
+    for (const lesson of lessons) {
+      const videoUrl = (lesson.videoUrl || lesson.contentUrl || '').trim();
+      let vimeoId = '';
+      let hash = '';
+
+      const matchWithSlash = videoUrl.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/|\?h=)([a-zA-Z0-9]+)/);
+      if (matchWithSlash) {
+        vimeoId = matchWithSlash[1];
+        hash = matchWithSlash[2];
+      } else {
+        const matchOnlyNum = videoUrl.match(/(\d{6,})/);
+        if (matchOnlyNum) vimeoId = matchOnlyNum[1];
+        const matchHashParam = videoUrl.match(/[?&]h=([a-zA-Z0-9]+)/);
+        if (matchHashParam) hash = matchHashParam[1];
+      }
+
+      if (!vimeoId) continue;
+
+      let matchedFilePath: string | null = null;
+      for (const basePath of possibleBasePaths) {
+        if (!fs.existsSync(basePath)) continue;
+
+        const courseDir = path.join(basePath, courseId);
+        if (fs.existsSync(courseDir)) {
+          const files = fs.readdirSync(courseDir);
+          if (hash) {
+            const found = files.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
+            if (found) { matchedFilePath = path.join(courseDir, found); break; }
+          }
+          const found = files.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
+          if (found) { matchedFilePath = path.join(courseDir, found); break; }
+        }
+
+        const allDirs = fs.readdirSync(basePath);
+        for (const d of allDirs) {
+          const fullDir = path.join(basePath, d);
+          if (fs.statSync(fullDir).isDirectory()) {
+            const subFiles = fs.readdirSync(fullDir);
+            if (hash) {
+              const found = subFiles.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
+              if (found) { matchedFilePath = path.join(fullDir, found); break; }
+            }
+            const found = subFiles.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
+            if (found) { matchedFilePath = path.join(fullDir, found); break; }
+          }
+        }
+        if (matchedFilePath) break;
+      }
+
+      if (matchedFilePath && fs.existsSync(matchedFilePath)) {
+        try {
+          const fileContent = fs.readFileSync(matchedFilePath, 'utf8');
+          const parsed = JSON.parse(fileContent);
+
+          let existing = await this.lessonAiDataRepository.findOne({
+            where: [
+              { lessonId: lesson.id, organizationId },
+              { lessonId: lesson.id }
+            ]
+          });
+
+          if (!existing) {
+            existing = this.lessonAiDataRepository.create({
+              organizationId: lesson.organizationId || organizationId,
+              courseId,
+              lessonId: lesson.id,
+              vimeoVideoId: vimeoId,
+              summary: parsed.summary || '',
+              quizPool: Array.isArray(parsed.quiz_pool) ? parsed.quiz_pool : [],
+              backstory: Array.isArray(parsed.backstory) ? parsed.backstory : [],
+              keyTakeaways: Array.isArray(parsed.key_takeaways) ? parsed.key_takeaways : [],
+            });
+          } else {
+            existing.summary = parsed.summary || existing.summary;
+            existing.quizPool = Array.isArray(parsed.quiz_pool) ? parsed.quiz_pool : existing.quizPool;
+            existing.backstory = Array.isArray(parsed.backstory) ? parsed.backstory : existing.backstory;
+            existing.keyTakeaways = Array.isArray(parsed.key_takeaways) ? parsed.key_takeaways : existing.keyTakeaways;
+            existing.vimeoVideoId = vimeoId;
+          }
+
+          await this.lessonAiDataRepository.save(existing);
+          syncedCount++;
+          results.push({ lessonTitle: lesson.title, file: path.basename(matchedFilePath), status: 'SYNCED' });
+        } catch (err: any) {
+          results.push({ lessonTitle: lesson.title, error: err.message, status: 'ERROR' });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      totalLessons: lessons.length,
+      syncedCount,
+      results,
+    };
+  }
 }
