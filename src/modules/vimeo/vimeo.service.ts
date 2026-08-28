@@ -52,33 +52,40 @@ export class VimeoService {
   async getVimeoClientForOrg(organizationId?: string): Promise<{ client: any; org: Organization | null }> {
     let org: Organization | null = null;
 
-    if (organizationId) {
-      try {
+    try {
+      if (organizationId) {
         org = await this.orgRepository.findOne({ where: { id: organizationId } });
-        if (
-          org?.vimeoConfig?.clientId?.trim() &&
-          org?.vimeoConfig?.clientSecret?.trim() &&
-          org?.vimeoConfig?.accessToken?.trim()
-        ) {
+      }
+      if (!org) {
+        org = await this.orgRepository.findOne({ where: { status: 'ACTIVE', isDeleted: false } });
+      }
+
+      if (org) {
+        let vimeoConfig: any = org.vimeoConfig;
+        if (typeof vimeoConfig === 'string') {
+          try { vimeoConfig = JSON.parse(vimeoConfig); } catch (e) {}
+        }
+
+        const clientId = (vimeoConfig?.clientId || '').trim();
+        const clientSecret = (vimeoConfig?.clientSecret || '').trim();
+        const accessToken = (vimeoConfig?.accessToken || '').trim();
+
+        if (clientId && clientSecret && accessToken) {
           const Vimeo = require('vimeo').Vimeo;
-          const customClient = new Vimeo(
-            org.vimeoConfig.clientId.trim(),
-            org.vimeoConfig.clientSecret.trim(),
-            org.vimeoConfig.accessToken.trim(),
-          );
-          this.logger.log(`Using custom Vimeo credentials for organization: ${org.name || organizationId}`);
+          const customClient = new Vimeo(clientId, clientSecret, accessToken);
+          this.logger.log(`Using custom Vimeo credentials for organization: ${org.name || org.id}`);
           return { client: customClient, org };
         }
-      } catch (err) {
-        this.logger.warn(`Could not load Vimeo settings for org ${organizationId}: ${err.message}`);
       }
+    } catch (err: any) {
+      this.logger.warn(`Could not load Vimeo settings: ${err.message}`);
     }
 
     if (this.defaultVimeoClient) {
       return { client: this.defaultVimeoClient, org };
     }
 
-    throw new InternalServerErrorException(
+    throw new BadRequestException(
       'Vimeo credentials not configured. Please enter your Vimeo Client ID, Secret, and Access Token in Organization Settings.',
     );
   }
@@ -86,14 +93,21 @@ export class VimeoService {
   private vimeoRequest(options: any, client: any): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!client) return reject(new Error('Vimeo client not initialized'));
-      client.request(options, (error: any, body: any, statusCode: any, headers: any) => {
+      
+      const reqOpts = { ...options };
+      if (reqOpts.data && !reqOpts.params) reqOpts.params = reqOpts.data;
+      if (reqOpts.params && !reqOpts.data) reqOpts.data = reqOpts.params;
+
+      client.request(reqOpts, (error: any, body: any, statusCode: any, headers: any) => {
         if (error) {
-          this.logger.error('Vimeo API Failure: Status ' + statusCode + ' Headers: ' + JSON.stringify(headers));
-          return reject(new Error('Vimeo HTTP ' + statusCode + ': ' + error.message));
+          this.logger.error('Vimeo API Failure: Status ' + statusCode, error);
+          const msg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
+          return reject(new Error('Vimeo HTTP ' + statusCode + ': ' + msg));
         }
         if (statusCode >= 400) {
           this.logger.error('Vimeo API Error: Status ' + statusCode, JSON.stringify(body));
-          return reject(new Error('Vimeo API Error ' + statusCode + ': ' + JSON.stringify(body)));
+          const msg = body?.error || body?.developer_message || JSON.stringify(body);
+          return reject(new Error('Vimeo API Error ' + statusCode + ': ' + msg));
         }
         resolve({ body, statusCode, headers });
       });
@@ -165,67 +179,61 @@ export class VimeoService {
   async generateUploadTicket(
     fileSize: number,
     videoName: string,
-    organizationId?: string
-  ): Promise<{ uploadLink: string; videoUri: string; videoId: string }> {
+    organizationId?: string,
+  ): Promise<{ uploadLink: string; link: string; vimeoId: string }> {
     const { client, org } = await this.getVimeoClientForOrg(organizationId);
-
     const folderName = (org?.name || 'Default Organization')
       .replace(/[^a-zA-Z0-9 _-]/g, '')
       .trim();
 
-    return new Promise((resolve, reject) => {
-      client.request(
-        {
-          method: 'POST',
-          path: '/me/videos',
-          data: {
-            upload: {
-              approach: 'tus',
-              size: fileSize,
-            },
-            name: videoName || 'Untitled Lesson Video',
-            privacy: {
-              view: 'anybody',
-              embed: 'public',
-            },
-          },
+    try {
+      // 1. Get or create folder
+      let folderUri: string | null = null;
+      try {
+        folderUri = await this.getOrCreateFolder(folderName, client);
+      } catch (fErr) {
+        this.logger.warn(`Folder creation skipped: ${fErr.message}`);
+      }
+
+      // 2. Create the video and get the tus upload link
+      const uploadParams: any = {
+        upload: {
+          approach: 'tus',
+          size: String(fileSize),
         },
-        async (error: any, body: any, statusCode: number) => {
-          if (error || statusCode >= 400) {
-            this.logger.error('Failed to create Vimeo upload ticket', error || body);
-            return reject(
-              new InternalServerErrorException(
-                `Vimeo ticket error (${statusCode}): ${error?.message || JSON.stringify(body)}`
-              )
-            );
-          }
+        name: videoName || 'Untitled Lesson Video',
+        privacy: { view: 'anybody', embed: 'public' },
+      };
 
-          const uploadLink = body.upload?.upload_link;
-          const videoUri = body.uri;
-          const videoId = videoUri ? videoUri.split('/').pop() : null;
+      if (folderUri) {
+        uploadParams.folder_uri = folderUri.startsWith('/projects/') ? folderUri : `/projects/${folderUri}`;
+      }
 
-          if (!uploadLink || !videoUri) {
-            return reject(
-              new InternalServerErrorException('Vimeo did not return a valid TUS upload link.')
-            );
-          }
+      const requestOptions: any = {
+        method: 'POST',
+        path: '/me/videos',
+        params: uploadParams,
+        data: uploadParams,
+      };
 
-          if (folderName && videoId) {
-            this.getOrCreateFolder(folderName, client)
-              .then((folderId) => {
-                if (folderId) {
-                  return this.moveVideoToFolder(videoId, folderId, client);
-                }
-              })
-              .catch((err) =>
-                this.logger.warn(`Async folder sorting failed: ${err.message}`)
-              );
-          }
+      const res = await this.vimeoRequest(requestOptions, client);
 
-          resolve({ uploadLink, videoUri, videoId });
-        }
+      const uploadLink = res.body?.upload?.upload_link;
+      const link = res.body?.link || (res.body?.uri ? `https://vimeo.com/${res.body.uri.replace('/videos/', '')}` : '');
+      const vimeoId = res.body?.uri?.replace('/videos/', '') || '';
+
+      if (!uploadLink) {
+        throw new Error('Vimeo did not return an upload link. Response: ' + JSON.stringify(res.body));
+      }
+
+      this.logger.log(`Generated Vimeo upload ticket successfully for ${videoName} (ID: ${vimeoId})`);
+      return { uploadLink, link, vimeoId };
+    } catch (err: any) {
+      this.logger.error('Failed to generate Vimeo upload ticket:', err);
+      throw new BadRequestException(
+        err.message || 'Failed to initialize Vimeo upload. Please check your Vimeo credentials in Settings.'
       );
-    });
+    }
   }
 
   /**

@@ -13,13 +13,13 @@ export class VimeoController {
   constructor(private readonly vimeoService: VimeoService) {}
 
   @Post('upload-ticket')
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('ORG_USER', 'FACULTY', 'SUPER_ADMIN')
   @ApiOperation({ summary: 'Generate a Vimeo TUS upload ticket' })
   async generateTicket(
     @Request() req: any,
     @Body() body: { fileSize: number; videoName: string }
   ) {
-    const orgId = req.user?.organizationId;
+    const orgId = req.user?.organizationId || req.user?.orgId || req.user?.organization;
     const ticket = await this.vimeoService.generateUploadTicket(body.fileSize, body.videoName, orgId);
     return ticket;
   }
