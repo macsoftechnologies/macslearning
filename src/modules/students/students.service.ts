@@ -395,14 +395,45 @@ export class StudentsService {
       }
     }
 
-    // Auto-resolve batch from date if not explicitly passed
-    if (!student.batchId) {
-      const now = new Date();
-      const month = now.getMonth(); // 0 to 11
-      const year = now.getFullYear();
-      const isFirstHalf = month < 6;
-      const batchName = isFirstHalf ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
-      
+    // Auto-resolve batch from program region cohort rules or date
+    if (!student.batchId || (approvalData?.batchId && approvalData.batchId.startsWith('auto:'))) {
+      const program = student.programId ? await this.programRepository.findOne({ where: { id: student.programId } }) : null;
+      let batchName = '';
+
+      if (approvalData?.batchId && approvalData.batchId.startsWith('auto:')) {
+        batchName = approvalData.batchId.replace('auto:', '').replace('(Auto)', '').trim();
+      }
+
+      if (!batchName && program?.regionConfigs?.length) {
+        const rcList = Array.isArray(program.regionConfigs) ? program.regionConfigs : [];
+        const matchedRc = rcList.find((c: any) => c.hasFixedBatches && c.batchDateRanges?.length > 0) || rcList[0];
+
+        if (matchedRc?.hasFixedBatches && matchedRc?.batchDateRanges?.length) {
+          const now = new Date();
+          const currentMonth = now.getMonth();
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          
+          let matched = matchedRc.batchDateRanges.find((range: any) => {
+            const sM = monthNames.indexOf(range.startMonth);
+            const eM = monthNames.indexOf(range.endMonth);
+            if (sM === -1 || eM === -1) return false;
+            if (sM <= eM) return currentMonth >= sM && currentMonth <= eM;
+            return currentMonth >= sM || currentMonth <= eM;
+          });
+          if (!matched) matched = matchedRc.batchDateRanges[0];
+
+          if (matched) {
+            batchName = `${matched.startMonth.slice(0, 3)} - ${matched.endMonth.slice(0, 3)} ${now.getFullYear()} Batch`;
+          }
+        }
+      }
+
+      if (!batchName) {
+        const now = new Date();
+        const year = now.getFullYear();
+        batchName = now.getMonth() < 6 ? `Jan - June ${year} Batch` : `July - Dec ${year} Batch`;
+      }
+
       const orgId = student.organizationId || organizationId;
       if (orgId) {
         let batch = await this.batchRepository.findOne({
@@ -412,12 +443,12 @@ export class StudentsService {
           batch = this.batchRepository.create({
             organizationId: orgId,
             name: batchName,
-            degreeName: 'General Track',
-            totalSemesters: 6,
+            degreeName: program?.name || 'General Track',
+            totalSemesters: program?.totalSemesters || 6,
             courseMappings: [],
             status: 'ACTIVE',
-            startDate: new Date(year, isFirstHalf ? 0 : 6, 1),
-            endDate: new Date(year, isFirstHalf ? 5 : 11, 30),
+            startDate: new Date(),
+            endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
           });
           await this.batchRepository.save(batch);
         }
