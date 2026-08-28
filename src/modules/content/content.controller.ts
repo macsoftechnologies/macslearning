@@ -388,4 +388,17 @@ export class ContentController {
       marks,
     );
   }
+  @Get('lessons/:lessonId/ai-data')
+  @Roles('ORG_USER', 'FACULTY', 'STUDENT')
+  async getLessonAiData(
+    @Request() req: any,
+    @Param('courseId') courseId: string,
+    @Param('lessonId') lessonId: string,
+  ) {
+    return this.contentService.getLessonAiData(
+      courseId,
+      lessonId,
+      req.user.organizationId,
+    );
+  }
 }

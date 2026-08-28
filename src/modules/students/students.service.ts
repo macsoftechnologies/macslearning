@@ -18,6 +18,7 @@ import { LessonProgress } from '../progress/entities/lessonProgress.entity';
 import { Assignment } from '../assignments/entities/assignment.entity';
 import { Submission } from '../assignments/entities/submission.entity';
 import { Program } from '../programs/entities/program.entity';
+import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
 import { AcademicBatch } from '../transcripts/entities/academic-batch.entity';
 import { Semester } from '../semesters/entities/semester.entity';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
@@ -489,6 +490,89 @@ export class StudentsService {
 
     await this.userRepository.save(student);
 
+    // Auto-enroll student into the active semester's courses for this program
+    try {
+      const progId = student.programId;
+      const orgId = student.organizationId || organizationId;
+      
+      if (progId && orgId) {
+        const semesterRepo = this.dataSource.getRepository(Semester);
+        const mappingRepo = this.dataSource.getRepository(ProgramCourseMapping);
+
+        // 1. Ensure Program-level enrollment exists
+        let progEnrollment = await this.enrollmentRepository.findOne({
+          where: { studentId: student.id, programId: progId, organizationId: orgId }
+        });
+        if (!progEnrollment) {
+          progEnrollment = this.enrollmentRepository.create({
+            studentId: student.id,
+            programId: progId,
+            organizationId: orgId,
+            batchId: student.batchId,
+            status: 'ACTIVE',
+            paymentStatus: 'PAID',
+            source: 'ADMIN_ENROLL',
+          });
+          await this.enrollmentRepository.save(progEnrollment);
+        }
+
+        // 2. Find starting semester
+        let activeSem = null;
+        if (student.semesterId) {
+          activeSem = await semesterRepo.findOne({ where: { id: student.semesterId, organizationId: orgId } });
+        }
+        if (!activeSem) {
+          activeSem = await semesterRepo.findOne({
+            where: { programId: progId, organizationId: orgId },
+            order: { createdAt: 'ASC' }
+          });
+        }
+        if (!activeSem) {
+          activeSem = await semesterRepo.findOne({
+            where: { organizationId: orgId },
+            order: { createdAt: 'ASC' }
+          });
+        }
+
+        if (activeSem) {
+          student.semesterId = activeSem.id;
+          await this.userRepository.save(student);
+
+          // 3. Find courses mapped to this semester
+          const mappings = await mappingRepo.find({
+            where: [
+              { programId: progId, semesterId: activeSem.id, organizationId: orgId },
+              { semesterId: activeSem.id, organizationId: orgId }
+            ]
+          });
+
+          const courseIdsToEnroll = mappings.map(m => m.courseId).filter(Boolean);
+          for (const cId of courseIdsToEnroll) {
+            let existingCourseEnrollment = await this.enrollmentRepository.findOne({
+              where: { studentId: student.id, courseId: cId, organizationId: orgId }
+            });
+            if (!existingCourseEnrollment) {
+              existingCourseEnrollment = this.enrollmentRepository.create({
+                studentId: student.id,
+                courseId: cId,
+                programId: progId,
+                semesterId: activeSem.id,
+                organizationId: orgId,
+                batchId: student.batchId,
+                status: 'ACTIVE',
+                paymentStatus: 'PAID',
+                source: 'ADMIN_ENROLL',
+              });
+              await this.enrollmentRepository.save(existingCourseEnrollment);
+            }
+          }
+          console.log(`Enrolled student ${student.id} into ${courseIdsToEnroll.length} courses for Semester: ${activeSem.term || activeSem.name}`);
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed to auto-enroll semester courses on student approval', e);
+    }
+
     return { message: 'Student approved successfully', student };
   }
 
@@ -575,6 +659,57 @@ export class StudentsService {
           (student as any).regionId = { id: region.id, name: (region as any).name };
         }
       } catch (e) {}
+    }
+
+    // 2. Auto-heal missing course enrollments for active students with program
+    if (student.status === 'ACTIVE' && student.programId) {
+      try {
+        const existingCoursesCount = await this.enrollmentRepository
+          .createQueryBuilder('e')
+          .where('e.studentId = :studentId', { studentId })
+          .andWhere('e.organizationId = :organizationId', { organizationId })
+          .andWhere('e.courseId IS NOT NULL')
+          .getCount();
+
+        if (existingCoursesCount === 0) {
+          const semesterRepo = this.dataSource.getRepository(Semester);
+          const mappingRepo = this.dataSource.getRepository(ProgramCourseMapping);
+          
+          let activeSem = student.semesterId 
+            ? await semesterRepo.findOne({ where: { id: student.semesterId, organizationId } })
+            : await semesterRepo.findOne({ where: { programId: student.programId, organizationId }, order: { createdAt: 'ASC' } });
+          
+          if (!activeSem) {
+            activeSem = await semesterRepo.findOne({ where: { organizationId }, order: { createdAt: 'ASC' } });
+          }
+
+          if (activeSem) {
+            const mappings = await mappingRepo.find({
+              where: [
+                { programId: student.programId, semesterId: activeSem.id, organizationId },
+                { semesterId: activeSem.id, organizationId }
+              ]
+            });
+            const cIds = mappings.map(m => m.courseId).filter(Boolean);
+            for (const cId of cIds) {
+              const crsEnrollment = this.enrollmentRepository.create({
+                studentId,
+                courseId: cId,
+                programId: student.programId,
+                semesterId: activeSem.id,
+                organizationId,
+                batchId: student.batchId,
+                status: 'ACTIVE',
+                paymentStatus: 'PAID',
+                source: 'ADMIN_ENROLL',
+              });
+              await this.enrollmentRepository.save(crsEnrollment);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`Auto-heal enrollments skipped for student ${studentId}: ${err.message}`);
+      }
     }
 
     // 2. Fetch Enrollments

@@ -622,4 +622,116 @@ export class ContentService {
     if (!ans) throw new NotFoundException('Answer not found');
     return ans;
   }
+
+  async getLessonAiData(courseId: string, lessonId: string, organizationId: string) {
+    const lesson = await this.lessonRepository.findOne({
+      where: { id: lessonId, courseId, organizationId },
+    });
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found');
+    }
+
+    const videoUrl = lesson.videoUrl || '';
+    let vimeoId = '';
+    let hash = '';
+
+    const matchWithHash = videoUrl.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/|\?h=)([a-zA-Z0-9]+)/);
+    if (matchWithHash) {
+      vimeoId = matchWithHash[1];
+      hash = matchWithHash[2];
+    } else {
+      const matchOnlyNum = videoUrl.match(/(\d{6,})/);
+      if (matchOnlyNum) {
+        vimeoId = matchOnlyNum[1];
+      }
+      const matchHashParam = videoUrl.match(/[?&]h=([a-zA-Z0-9]+)/);
+      if (matchHashParam) {
+        hash = matchHashParam[1];
+      }
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const basePath = path.resolve(process.cwd(), 'public/uploads/aijsonfiles');
+
+    let matchedFilePath: string | null = null;
+
+    // Strategy 1: check course directory
+    const courseDir = path.join(basePath, courseId);
+    if (fs.existsSync(courseDir)) {
+      const files = fs.readdirSync(courseDir);
+      if (vimeoId && hash) {
+        const found = files.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
+        if (found) matchedFilePath = path.join(courseDir, found);
+      }
+      if (!matchedFilePath && vimeoId) {
+        const found = files.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
+        if (found) matchedFilePath = path.join(courseDir, found);
+      }
+    }
+
+    // Strategy 2: search across any subdirectories in aijsonfiles
+    if (!matchedFilePath && fs.existsSync(basePath)) {
+      const allDirs = fs.readdirSync(basePath);
+      for (const d of allDirs) {
+        const fullDir = path.join(basePath, d);
+        if (fs.statSync(fullDir).isDirectory()) {
+          const subFiles = fs.readdirSync(fullDir);
+          if (vimeoId && hash) {
+            const found = subFiles.find((f: string) => f.includes(vimeoId) && f.includes(hash) && f.endsWith('.json'));
+            if (found) {
+              matchedFilePath = path.join(fullDir, found);
+              break;
+            }
+          }
+          if (!matchedFilePath && vimeoId) {
+            const found = subFiles.find((f: string) => f.includes(vimeoId) && f.endsWith('.json'));
+            if (found) {
+              matchedFilePath = path.join(fullDir, found);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Strategy 3: direct json files in root aijsonfiles
+    if (!matchedFilePath && fs.existsSync(basePath)) {
+      const rootFiles = fs.readdirSync(basePath).filter((f: string) => f.endsWith('.json'));
+      if (vimeoId) {
+        const found = rootFiles.find((f: string) => f.includes(vimeoId));
+        if (found) matchedFilePath = path.join(basePath, found);
+      }
+    }
+
+    if (matchedFilePath && fs.existsSync(matchedFilePath)) {
+      try {
+        const fileContent = fs.readFileSync(matchedFilePath, 'utf8');
+        const parsed = JSON.parse(fileContent);
+        return {
+          success: true,
+          found: true,
+          data: {
+            summary: parsed.summary || '',
+            quiz_pool: Array.isArray(parsed.quiz_pool) ? parsed.quiz_pool : [],
+            backstory: Array.isArray(parsed.backstory) ? parsed.backstory : [],
+            key_takeaways: Array.isArray(parsed.key_takeaways) ? parsed.key_takeaways : [],
+          },
+        };
+      } catch (err) {
+        console.error('Error reading AI JSON content', err);
+      }
+    }
+
+    return {
+      success: true,
+      found: false,
+      data: {
+        summary: lesson.description || 'Lesson concepts and key principles for academic review.',
+        quiz_pool: [],
+        backstory: [],
+        key_takeaways: [],
+      },
+    };
+  }
 }
