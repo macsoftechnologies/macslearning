@@ -38,8 +38,7 @@ export class Program {
   @Column({ type: 'json', nullable: true })
   regionalPrices: any[];
 
-  @Column({ type: 'json', nullable: true })
-  regionConfigs: any[];
+  regionConfigs?: any[];
 
   @Column({ type: 'varchar', nullable: true })
   coursePlanId: string;
