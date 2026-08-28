@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, DataSource } from 'typeorm';
 import { Course } from './entities/course.entity';
+import { Lesson } from '../content/entities/lesson.entity';
 import { CoursePlan } from '../organizations/entities/course-plan.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { createPaginatedResponse } from '../../common/utils/pagination.util';
@@ -16,6 +17,7 @@ export class CoursesService {
     private coursePlanRepository: Repository<CoursePlan>,
     @InjectRepository(ProgramCourseMapping)
     private programCourseMappingRepository: Repository<ProgramCourseMapping>,
+    private dataSource: DataSource,
   ) {}
 
   async createCourse(
@@ -146,8 +148,33 @@ export class CoursesService {
 
     const [data, totalItems] = await queryBuilder.getManyAndCount();
 
-    // Optionally populate instructors in memory
-    // this avoids complex json_table joins in mysql 5.7+
+    if (data.length > 0) {
+      try {
+        const courseIds = data.map((c) => c.id);
+        const lessonCounts = await this.dataSource
+          .getRepository(Lesson)
+          .createQueryBuilder('l')
+          .select('l.courseId', 'courseId')
+          .addSelect('COUNT(*)', 'count')
+          .where('l.courseId IN (:...courseIds)', { courseIds })
+          .andWhere('l.isDeleted = :isDeleted', { isDeleted: false })
+          .andWhere('(l.videoUrl IS NOT NULL AND l.videoUrl != "" OR l.type = "VIDEO")')
+          .groupBy('l.courseId')
+          .getRawMany();
+
+        const videoCountMap: Record<string, number> = {};
+        lessonCounts.forEach((lc: any) => {
+          videoCountMap[lc.courseId] = parseInt(lc.count) || 0;
+        });
+
+        data.forEach((c) => {
+          (c as any).videosCount = videoCountMap[c.id] || 0;
+          (c as any).totalVideos = videoCountMap[c.id] || 0;
+        });
+      } catch (err: any) {
+        console.warn('Could not populate video counts for courses', err);
+      }
+    }
 
     return createPaginatedResponse(data, totalItems, page, limit);
   }
