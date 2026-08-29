@@ -677,12 +677,18 @@ export class ContentService {
       const fs = require('fs');
       const path = require('path');
       const possibleBasePaths = [
+        path.resolve(process.cwd(), '../frontend_lms/newlms/newlms/public'),
+        path.resolve(process.cwd(), 'public'),
         path.resolve(process.cwd(), 'public/uploads/aijsonfiles'),
+        path.resolve(process.cwd(), '../public'),
         path.resolve(process.cwd(), '../public/uploads/aijsonfiles'),
+        path.resolve(__dirname, '../../../../frontend_lms/newlms/newlms/public'),
+        path.resolve(__dirname, '../../../../public'),
         path.resolve(__dirname, '../../../../public/uploads/aijsonfiles'),
         path.resolve(__dirname, '../../../public/uploads/aijsonfiles'),
         path.resolve('/var/www/backend/public/uploads/aijsonfiles'),
-        path.resolve('/app/public/uploads/aijsonfiles')
+        path.resolve('/app/public/uploads/aijsonfiles'),
+        path.resolve('/var/www/frontend/public'),
       ];
 
       let matchedFilePath: string | null = null;
@@ -872,12 +878,18 @@ export class ContentService {
     const fs = require('fs');
     const path = require('path');
     const possibleBasePaths = [
+      path.resolve(process.cwd(), '../frontend_lms/newlms/newlms/public'),
+      path.resolve(process.cwd(), 'public'),
       path.resolve(process.cwd(), 'public/uploads/aijsonfiles'),
+      path.resolve(process.cwd(), '../public'),
       path.resolve(process.cwd(), '../public/uploads/aijsonfiles'),
+      path.resolve(__dirname, '../../../../frontend_lms/newlms/newlms/public'),
+      path.resolve(__dirname, '../../../../public'),
       path.resolve(__dirname, '../../../../public/uploads/aijsonfiles'),
       path.resolve(__dirname, '../../../public/uploads/aijsonfiles'),
       path.resolve('/var/www/backend/public/uploads/aijsonfiles'),
-      path.resolve('/app/public/uploads/aijsonfiles')
+      path.resolve('/app/public/uploads/aijsonfiles'),
+      path.resolve('/var/www/frontend/public'),
     ];
 
     let syncedCount = 0;

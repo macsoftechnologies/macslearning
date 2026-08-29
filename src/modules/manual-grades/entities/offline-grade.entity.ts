@@ -27,7 +27,10 @@ export class OfflineGrade {
   academicBatchId: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
-  assignmentScore: number; // Max 70
+  assignmentScore: number; // Max 65 (Internal Continuous Assessment)
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, nullable: true })
+  attendanceScore: number; // Max 5 (Live Session Attendance)
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   finalExamScore: number; // Max 30

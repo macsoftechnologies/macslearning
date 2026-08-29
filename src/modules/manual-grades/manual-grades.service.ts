@@ -172,6 +172,35 @@ export class ManualGradesService {
       const totalScore = Math.min(100, Math.round((Number(assignmentScore70) + Number(finalExamScore30)) * 100) / 100);
       const gradeLetter = this.calculateGradeLetter(totalScore);
 
+      let ciaScore65 = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : null;
+      let attScore5 = grade?.attendanceScore !== undefined && grade?.attendanceScore !== null ? Number(grade.attendanceScore) : null;
+
+      if (ciaScore65 === null) {
+        let internalPercentages: number[] = [];
+        const vq = videoQuizMap[enrollment.studentId];
+        if (vq && vq.total > 0) internalPercentages.push((vq.correct / vq.total) * 100);
+        const nfe = nonFinalExamMap[enrollment.studentId];
+        if (nfe && nfe.count > 0) internalPercentages.push(nfe.totalScorePct / nfe.count);
+
+        if (internalPercentages.length > 0) {
+          const avgCiaPct = internalPercentages.reduce((a, b) => a + b, 0) / internalPercentages.length;
+          ciaScore65 = Math.min(65, Math.round((avgCiaPct * 0.65) * 100) / 100);
+        } else {
+          ciaScore65 = 0;
+        }
+      }
+
+      if (attScore5 === null) {
+        attScore5 = attendanceScoreMap[enrollment.studentId] !== undefined ? attendanceScoreMap[enrollment.studentId] : 5;
+      }
+
+      let finalScore30 = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null 
+        ? Number(grade.finalExamScore) 
+        : (finalExamOnlineMap[enrollment.studentId] !== undefined ? Math.round((finalExamOnlineMap[enrollment.studentId] * 0.30) * 100) / 100 : 0);
+
+      const calculatedTotal = Math.min(100, Math.round((Number(ciaScore65) + Number(attScore5) + Number(finalScore30)) * 100) / 100);
+      const calculatedGrade = this.calculateGradeLetter(calculatedTotal);
+
       return {
         studentId: enrollment.studentId,
         student: {
@@ -179,10 +208,11 @@ export class ManualGradesService {
           lastName: '',
           email: student?.email || '',
         },
-        assignmentScore: assignmentScore70, // 70% component (65% In-Video Quizzes/Exams + 5% Attendance)
-        finalExamScore: finalExamScore30,  // 30% Final Exam component
-        totalScore,
-        grade: gradeLetter,
+        assignmentScore: ciaScore65, // 65% Internal Assessment
+        attendanceScore: attScore5,  // 5% Attendance
+        finalExamScore: finalScore30, // 30% Final Exam
+        totalScore: calculatedTotal,
+        grade: calculatedGrade,
         isGraded: !!grade,
       };
     });
@@ -193,7 +223,7 @@ export class ManualGradesService {
   async bulkUpsert(gradesData: any[]) {
     const results = [];
     for (const data of gradesData) {
-      const { studentId, courseId, semesterId, academicBatchId, assignmentScore, finalExamScore, organizationId } = data;
+      const { studentId, courseId, semesterId, academicBatchId, assignmentScore, attendanceScore, finalExamScore, organizationId } = data;
       
       let score70 = Number(assignmentScore) || 0;
       
