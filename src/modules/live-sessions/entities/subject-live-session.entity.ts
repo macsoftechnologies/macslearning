@@ -17,17 +17,29 @@ export class SubjectLiveSession {
   @Column({ type: 'varchar' })
   organizationId: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   batchId: string;
 
   @Column({ type: 'varchar', nullable: true })
   programId: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   courseId: string;
 
   @Column({ type: 'int', default: 1 })
   sessionNumber: number; // 1 to 5 (e.g. Call 1 of 5)
+
+  @Column({ type: 'varchar', default: 'BATCH' })
+  meetingType: string; // 'BATCH' (All students in cohort) | 'SINGLE_STUDENT' (1-on-1)
+
+  @Column({ type: 'varchar', nullable: true })
+  facultyId: string; // Optional assigned faculty
+
+  @Column({ type: 'varchar', nullable: true })
+  studentId: string; // Target student ID if meetingType is 'SINGLE_STUDENT'
+
+  @Column({ type: 'varchar', default: 'ADMIN' })
+  hostType: string; // 'ADMIN' | 'FACULTY'
 
   @Column({ type: 'varchar', nullable: true })
   title: string;
