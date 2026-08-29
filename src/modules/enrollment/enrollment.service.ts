@@ -797,12 +797,16 @@ export class EnrollmentService {
         'course.description as course_description',
         'course.status as course_status',
         'course.pricing as course_pricing',
+        'course.thumbnailUrl as course_thumbnailUrl',
+        'course.credits as course_credits',
       ])
       .orderBy('enrollment.createdAt', 'DESC')
       .getRawMany();
 
     const mappedEnrollments = enrollments.map((e) => ({
       ...e,
+      thumbnailUrl: e.course_thumbnailUrl,
+      thumbnail: e.course_thumbnailUrl,
       courseId: {
         _id: e.course_id,
         id: e.course_id,
@@ -810,6 +814,20 @@ export class EnrollmentService {
         description: e.course_description,
         status: e.course_status,
         pricing: e.course_pricing,
+        thumbnailUrl: e.course_thumbnailUrl,
+        thumbnail: e.course_thumbnailUrl,
+        credits: e.course_credits,
+      },
+      course: {
+        _id: e.course_id,
+        id: e.course_id,
+        title: e.course_title,
+        description: e.course_description,
+        status: e.course_status,
+        pricing: e.course_pricing,
+        thumbnailUrl: e.course_thumbnailUrl,
+        thumbnail: e.course_thumbnailUrl,
+        credits: e.course_credits,
       },
     }));
 
