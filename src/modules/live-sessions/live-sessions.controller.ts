@@ -16,7 +16,8 @@ export class LiveSessionsController {
     @Query('batchId') batchId?: string,
     @Query('courseId') courseId?: string,
   ) {
-    return this.liveSessionsService.findAll(req.user.organizationId, batchId, courseId);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.findAll(orgId, batchId, courseId);
   }
 
   @Get('batch/:batchId/roster')
@@ -26,26 +27,30 @@ export class LiveSessionsController {
     @Param('batchId') batchId: string,
     @Query('courseId') courseId?: string,
   ) {
-    return this.liveSessionsService.getBatchRoster(req.user.organizationId, batchId, courseId);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.getBatchRoster(orgId, batchId, courseId);
   }
 
   @Get('student/upcoming')
   @Roles('STUDENT', 'ORG_USER', 'SUPER_ADMIN')
   async getUpcomingForStudent(@Request() req: any) {
-    const studentId = req.user.id || req.user.sub;
-    return this.liveSessionsService.getUpcomingForStudent(req.user.organizationId, studentId);
+    const studentId = req.user?.id || req.user?.userId || req.user?.sub;
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.getUpcomingForStudent(orgId, studentId);
   }
 
   @Post()
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async create(@Request() req: any, @Body() body: any) {
-    return this.liveSessionsService.create(req.user.organizationId, body);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.create(orgId, body);
   }
 
   @Put(':id')
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async update(@Request() req: any, @Param('id') id: string, @Body() body: any) {
-    return this.liveSessionsService.update(req.user.organizationId, id, body);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.update(orgId, id, body);
   }
 
   @Put(':id/attendance')
@@ -55,12 +60,14 @@ export class LiveSessionsController {
     @Param('id') id: string,
     @Body('attendeeStudentIds') attendeeStudentIds: string[],
   ) {
-    return this.liveSessionsService.markAttendance(req.user.organizationId, id, attendeeStudentIds);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.markAttendance(orgId, id, attendeeStudentIds);
   }
 
   @Delete(':id')
-  @Roles('SUPER_ADMIN', 'ORG_USER')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async remove(@Request() req: any, @Param('id') id: string) {
-    return this.liveSessionsService.remove(req.user.organizationId, id);
+    const orgId = req.user?.organizationId || req.user?.orgId;
+    return this.liveSessionsService.remove(orgId, id);
   }
 }
