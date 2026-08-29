@@ -743,6 +743,15 @@ export class ContentService {
       }
     }
 
+    if (!aiRecord || (!aiRecord.summary && (!aiRecord.quizPool || !aiRecord.quizPool.length) && (!aiRecord.keyTakeaways || !aiRecord.keyTakeaways.length))) {
+      return {
+        success: true,
+        found: false,
+        hasAiData: false,
+        data: null,
+      };
+    }
+
     const fullQuizPool = Array.isArray(aiRecord?.quizPool) ? aiRecord.quizPool : [];
     
     // Pick 5 random questions for this student's attempt
@@ -766,9 +775,10 @@ export class ContentService {
 
     return {
       success: true,
-      found: !!aiRecord,
+      found: true,
+      hasAiData: true,
       data: {
-        summary: aiRecord?.summary || lesson.description || 'Lesson concepts and key principles for academic review.',
+        summary: aiRecord?.summary || '',
         quiz_pool: random5Questions,
         total_pool_count: fullQuizPool.length,
         backstory: Array.isArray(aiRecord?.backstory) ? aiRecord.backstory : [],

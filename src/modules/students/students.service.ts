@@ -833,10 +833,6 @@ export class StudentsService {
               total: totalExamsMap.get(e.courseId) || 0,
               completed: completedExamsMap.get(e.courseId) || 0,
             },
-            assignments: {
-              total: totalAssignmentsMap.get(e.courseId) || 0,
-              completed: completedAssignmentsMap.get(e.courseId) || 0,
-            },
           },
         };
       });
