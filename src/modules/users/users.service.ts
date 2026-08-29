@@ -71,6 +71,8 @@ export class UsersService {
     const normalizedMobile =
       typeof mobile === 'string' && mobile.trim() ? mobile.trim() : undefined;
 
+    const ataStatus = studentData.ataStatus || customProfile?.ataStatus || 'NON_ATA';
+
     const student = this.userRepository.create({
       email,
       passwordHash,
@@ -80,11 +82,12 @@ export class UsersService {
       organizationId,
       mobile: normalizedMobile,
       regionId,
+      ataStatus,
     });
 
     const profilePayload = { ...studentData };
     // Remove base user fields from profile payload
-    const baseFields = ['email', 'password', 'fullName', 'mobile', 'regionId', 'customProfile'];
+    const baseFields = ['email', 'password', 'fullName', 'mobile', 'regionId', 'ataStatus', 'customProfile'];
     for (const field of baseFields) {
       delete profilePayload[field];
     }

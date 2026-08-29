@@ -199,14 +199,20 @@ export class StudentsService {
 
     const userUpdateFields = ['fullName', 'mobile', 'regionId', 'ataStatus'];
     const userPayload: any = {};
-    const profilePayload: any = {};
+    const incomingCustomProfile: any = {};
 
     for (const key of Object.keys(updateData)) {
       if (userUpdateFields.includes(key)) {
         userPayload[key] = updateData[key];
+      } else if (key === 'customProfile' && typeof updateData[key] === 'object' && updateData[key] !== null) {
+        Object.assign(incomingCustomProfile, updateData[key]);
       } else {
-        profilePayload[key] = updateData[key];
+        incomingCustomProfile[key] = updateData[key];
       }
+    }
+
+    if (incomingCustomProfile.ataStatus && !userPayload.ataStatus) {
+      userPayload.ataStatus = incomingCustomProfile.ataStatus;
     }
 
     if (Object.keys(userPayload).length > 0) {
@@ -216,10 +222,12 @@ export class StudentsService {
       );
     }
 
-    if (Object.keys(profilePayload).length > 0) {
-      const customProfile = student.customProfile || {};
-      Object.assign(customProfile, profilePayload);
-      await this.userRepository.update({ id: studentId }, { customProfile });
+    if (Object.keys(incomingCustomProfile).length > 0) {
+      const mergedCustomProfile = {
+        ...(student.customProfile || {}),
+        ...incomingCustomProfile,
+      };
+      await this.userRepository.update({ id: studentId }, { customProfile: mergedCustomProfile });
     }
 
     const updatedStudent = await this.userRepository.findOne({
