@@ -689,12 +689,15 @@ export class StudentsService {
 
         const cVideos = await this.lessonProgressRepository
           .createQueryBuilder('lp')
-          .leftJoin(Lesson, 'lesson', 'lesson.id = lp.lessonId')
+          .innerJoin(Lesson, 'lesson', 'lesson.id = lp.lessonId')
           .where('lp.studentId = :studentId', { studentId })
           .andWhere('lp.courseId IN (:...filteredCourseIds)', {
             filteredCourseIds,
           })
           .andWhere('lp.isCompleted = :completed', { completed: true })
+          .andWhere('(lesson.type = :type OR lesson.videoUrl IS NOT NULL)', {
+            type: 'VIDEO',
+          })
           .select('lp.courseId', 'courseId')
           .addSelect('COUNT(DISTINCT lp.lessonId)', 'count')
           .groupBy('lp.courseId')
