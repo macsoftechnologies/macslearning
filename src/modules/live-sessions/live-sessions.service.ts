@@ -104,13 +104,37 @@ export class LiveSessionsService {
     return this.sessionRepo.save(session);
   }
 
-  async getBatchRoster(organizationId: string, batchId: string) {
-    const enrollments = await this.enrollmentRepo.find({
-      where: { organizationId, batchId, status: 'ACTIVE' },
-    });
+  async getBatchRoster(organizationId: string, batchId: string, courseId?: string) {
+    let enrollments: Enrollment[] = [];
 
-    const studentIds = Array.from(new Set(enrollments.map((e) => e.studentId)));
-    if (studentIds.length === 0) return [];
+    if (batchId && batchId !== 'all') {
+      enrollments = await this.enrollmentRepo.find({
+        where: { organizationId, batchId, status: 'ACTIVE' },
+      });
+    }
+
+    if (enrollments.length === 0 && courseId) {
+      enrollments = await this.enrollmentRepo.find({
+        where: { organizationId, courseId, status: 'ACTIVE' },
+      });
+    }
+
+    let studentIds = Array.from(new Set(enrollments.map((e) => e.studentId)));
+    
+    // If still empty, fetch all active students of the organization as fallback
+    if (studentIds.length === 0) {
+      const allStudents = await this.userRepo.find({
+        where: { organizationId, userType: 'STUDENT', status: 'ACTIVE', isDeleted: false },
+        take: 100,
+      });
+      return allStudents.map((s) => ({
+        id: s.id,
+        fullName: s.fullName,
+        email: s.email,
+        mobile: s.mobile,
+        photo: (s.customProfile as any)?.documents?.photo?.url || (s.customProfile as any)?.documents?.photo || null,
+      }));
+    }
 
     const students = await this.userRepo.find({
       where: { id: In(studentIds), organizationId },
@@ -121,6 +145,7 @@ export class LiveSessionsService {
       fullName: s.fullName,
       email: s.email,
       mobile: s.mobile,
+      photo: (s.customProfile as any)?.documents?.photo?.url || (s.customProfile as any)?.documents?.photo || null,
     }));
   }
 

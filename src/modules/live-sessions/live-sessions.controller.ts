@@ -21,8 +21,12 @@ export class LiveSessionsController {
 
   @Get('batch/:batchId/roster')
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
-  async getBatchRoster(@Request() req: any, @Param('batchId') batchId: string) {
-    return this.liveSessionsService.getBatchRoster(req.user.organizationId, batchId);
+  async getBatchRoster(
+    @Request() req: any,
+    @Param('batchId') batchId: string,
+    @Query('courseId') courseId?: string,
+  ) {
+    return this.liveSessionsService.getBatchRoster(req.user.organizationId, batchId, courseId);
   }
 
   @Get('student/upcoming')
