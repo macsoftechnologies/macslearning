@@ -795,6 +795,7 @@ export class StudentsService {
         return {
           ...e,
           progressPercentage: progPct,
+          courseId: courses.find((c: any) => c.id === e.courseId) || e.courseId,
           course: courses.find((c: any) => c.id === e.courseId),
           courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
           program: programs.find((p) => p.id === e.programId)
