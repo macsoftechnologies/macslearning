@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Body,
@@ -10,35 +11,101 @@ import {
   Patch,
 } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
-import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateThreadDto } from './dto/discussion.dto';
 
 @Controller('discussion')
 @UseGuards(JwtAuthGuard)
 export class DiscussionController {
-  constructor(
-    private readonly discussionService: DiscussionService,
-    private readonly enrollmentService: EnrollmentService,
-  ) {}
+  constructor(private readonly discussionService: DiscussionService) {}
 
+  // 1. Get all inbox conversations (Direct 1:1 + Batch Groups)
+  @Get('inbox')
+  async getInbox(@Request() req: any) {
+    return this.discussionService.getInbox(
+      req.user.organizationId,
+      req.user.userId || req.user.id,
+      req.user.userType,
+    );
+  }
+
+  // 2. Get available contacts to start chat with (Admins, Faculty, Classmates)
+  @Get('contacts')
+  async getContacts(@Request() req: any) {
+    return this.discussionService.getContacts(
+      req.user.organizationId,
+      req.user.userId || req.user.id,
+      req.user.userType,
+    );
+  }
+
+  // 3. Start or open 1:1 direct thread with student/faculty/admin
+  @Post('direct-thread')
+  async startDirectThread(
+    @Request() req: any,
+    @Body('recipientId') recipientId: string,
+    @Body('initialMessage') initialMessage?: string,
+  ) {
+    return this.discussionService.startOrGetDirectThread(
+      req.user.organizationId,
+      req.user.userId || req.user.id,
+      recipientId,
+      initialMessage,
+    );
+  }
+
+  // 4. Open or ensure Batch Group Thread
+  @Post('batch-thread')
+  async openBatchThread(
+    @Request() req: any,
+    @Body('batchId') batchId: string,
+    @Body('title') title?: string,
+  ) {
+    return this.discussionService.getOrCreateBatchThread(
+      req.user.organizationId,
+      batchId,
+      title,
+    );
+  }
+
+  // 5. Get all messages of a thread
+  @Get('threads/:threadId/messages')
+  async getThreadMessages(
+    @Request() req: any,
+    @Param('threadId') threadId: string,
+  ) {
+    return this.discussionService.getThreadMessages(
+      req.user.organizationId,
+      threadId,
+    );
+  }
+
+  // 6. Send message into a thread
+  @Post('threads/:threadId/messages')
+  async sendMessage(
+    @Request() req: any,
+    @Param('threadId') threadId: string,
+    @Body('content') content: string,
+  ) {
+    return this.discussionService.addMessage(
+      req.user.organizationId,
+      threadId,
+      req.user.userId || req.user.id,
+      content,
+    );
+  }
+
+  // Legacy Course Forum endpoints
   @Post('courses/:courseId/threads')
   async createThread(
     @Request() req: any,
     @Param('courseId') courseId: string,
     @Body() threadData: CreateThreadDto,
   ) {
-    if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        courseId,
-      );
-    }
     return this.discussionService.createThread(
       req.user.organizationId,
       courseId,
-      req.user.userId,
+      req.user.userId || req.user.id,
       threadData,
     );
   }
@@ -49,13 +116,6 @@ export class DiscussionController {
     @Param('courseId') courseId: string,
     @Query('lessonId') lessonId?: string,
   ) {
-    if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        courseId,
-      );
-    }
     return this.discussionService.getThreads(
       req.user.organizationId,
       courseId,
@@ -69,13 +129,6 @@ export class DiscussionController {
     @Param('courseId') courseId: string,
     @Param('threadId') threadId: string,
   ) {
-    if (req.user.userType === 'STUDENT') {
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        courseId,
-      );
-    }
     return this.discussionService.getThreadById(
       req.user.organizationId,
       courseId,
@@ -89,67 +142,55 @@ export class DiscussionController {
     @Param('threadId') threadId: string,
     @Body('content') content: string,
   ) {
-    if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(
-        req.user.organizationId,
-        undefined,
-        threadId,
-      );
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        thread.courseId.toString(),
-      );
-    }
-    return this.discussionService.addReply(
+    return this.discussionService.addMessage(
       req.user.organizationId,
       threadId,
-      req.user.userId,
+      req.user.userId || req.user.id,
       content,
     );
   }
 
   @Get('threads/:threadId/replies')
-  async getReplies(@Request() req: any, @Param('threadId') threadId: string) {
-    if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(
-        req.user.organizationId,
-        undefined,
-        threadId,
-      );
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        thread.courseId.toString(),
-      );
-    }
-    return this.discussionService.getReplies(req.user.organizationId, threadId);
-  }
-
-  @Patch('threads/:threadId/replies/:replyId/accept')
-  async acceptReply(
+  async getReplies(
     @Request() req: any,
     @Param('threadId') threadId: string,
-    @Param('replyId') replyId: string,
   ) {
-    if (req.user.userType === 'STUDENT') {
-      const thread = await this.discussionService.findThreadById(
-        req.user.organizationId,
-        undefined,
-        threadId,
-      );
-      await this.enrollmentService.verifyActiveEnrollment(
-        req.user.organizationId,
-        req.user.userId,
-        thread.courseId.toString(),
-      );
-    }
-    return this.discussionService.markReplyAsAccepted(
+    return this.discussionService.getReplies(
       req.user.organizationId,
       threadId,
+    );
+  }
+
+  @Delete('threads/:threadId')
+  async deleteThread(
+    @Request() req: any,
+    @Param('threadId') threadId: string,
+  ) {
+    return this.discussionService.deleteThread(
+      req.user.organizationId,
+      threadId,
+    );
+  }
+
+  @Delete('replies/:replyId')
+  async deleteReply(
+    @Request() req: any,
+    @Param('replyId') replyId: string,
+  ) {
+    return this.discussionService.deleteReply(
+      req.user.organizationId,
       replyId,
-      req.user.userId,
-      req.user.userType,
+    );
+  }
+
+  @Patch('replies/:replyId/accept')
+  async markAccepted(
+    @Request() req: any,
+    @Param('replyId') replyId: string,
+  ) {
+    return this.discussionService.markAccepted(
+      req.user.organizationId,
+      replyId,
     );
   }
 }
