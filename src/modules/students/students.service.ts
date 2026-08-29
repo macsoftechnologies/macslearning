@@ -792,12 +792,16 @@ export class StudentsService {
         const compL = completedLessonsMap.get(e.courseId) || 0;
         const progPct = totalL > 0 ? Math.round((compL / totalL) * 100) : 0;
 
+        const matchedCourse = courses.find((c: any) => c.id === e.courseId);
+
         return {
           ...e,
           progressPercentage: progPct,
-          courseId: courses.find((c: any) => c.id === e.courseId) || e.courseId,
-          course: courses.find((c: any) => c.id === e.courseId),
-          courseTitle: courses.find((c: any) => c.id === e.courseId)?.title,
+          courseId: matchedCourse || e.courseId,
+          course: matchedCourse || null,
+          courseTitle: matchedCourse?.title || '',
+          thumbnailUrl: matchedCourse?.thumbnailUrl || null,
+          thumbnail: matchedCourse?.thumbnailUrl || null,
           program: programs.find((p) => p.id === e.programId)
             ? {
                 ...programs.find((p) => p.id === e.programId),
