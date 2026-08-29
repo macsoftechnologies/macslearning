@@ -868,11 +868,11 @@ export class StudentsService {
       }
     }
 
-    // Include In-Video Quiz Answers in examResults
+    // Include In-Video Quiz Answers and Lesson Checkpoint Answers in examResults
     try {
-      const vqAnswers = await this.dataSource.getRepository('videoquiz_answers')
+      const vqAnswers = await this.dataSource.getRepository('videoquizanswers')
         .createQueryBuilder('vqa')
-        .leftJoin('video_quizzes', 'vq', 'vq.id = vqa.quizId')
+        .leftJoin('videoquizs', 'vq', 'vq.id = vqa.quizId')
         .leftJoin('lessons', 'l', 'l.id = vqa.lessonId')
         .where('vqa.studentId = :studentId', { studentId })
         .andWhere('vqa.organizationId = :organizationId', { organizationId })
@@ -891,12 +891,12 @@ export class StudentsService {
         id: v.id,
         status: 'SUBMITTED',
         isPassed: !!v.isCorrect,
-        score: v.marks || (v.isCorrect ? 1 : 0),
-        marksObtained: v.marks || (v.isCorrect ? 1 : 0),
+        score: v.marks !== null && v.marks !== undefined ? v.marks : (v.isCorrect ? 1 : 0),
+        marksObtained: v.marks !== null && v.marks !== undefined ? v.marks : (v.isCorrect ? 1 : 0),
         courseId: v.courseId,
         createdAt: v.createdAt,
         exam: {
-          title: `[In-Video Quiz] ${v.lessonTitle ? v.lessonTitle + ': ' : ''}${v.questionText || 'Lecture Checkpoint'}`,
+          title: `[In-Video Quiz] ${v.lessonTitle ? v.lessonTitle + ': ' : ''}${v.questionText || 'Checkpoint'}`,
           totalMarks: 1,
           isFinalExam: false,
           courseId: v.courseId,
@@ -905,7 +905,7 @@ export class StudentsService {
 
       attempts = [...attempts, ...mappedVqAttempts];
     } catch (err) {
-      console.warn('Video quiz answers query omitted:', err.message);
+      console.warn('Video quiz answers query:', err.message);
     }
 
     return {

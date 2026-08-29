@@ -69,7 +69,7 @@ export class ManualGradesService {
     try {
       const vqList = await this.enrollmentRepository.manager.createQueryBuilder()
         .select(['vqa.studentId as studentId', 'vqa.isCorrect as isCorrect', 'vqa.marks as marks'])
-        .from('videoquiz_answers', 'vqa')
+        .from('videoquizanswers', 'vqa')
         .innerJoin('lessons', 'l', 'l.id = vqa.lessonId')
         .where('vqa.studentId IN (:...studentIds)', { studentIds })
         .andWhere('vqa.organizationId = :organizationId', { organizationId })
