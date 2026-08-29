@@ -372,6 +372,7 @@ export class StudentsService {
       batchId?: string;
       semesterId?: string;
       programId?: string;
+      deferEnrollmentUntilPurchase?: boolean;
     },
   ) {
     const whereClause: any = {
@@ -506,6 +507,14 @@ export class StudentsService {
       if (progId && orgId) {
         const semesterRepo = this.dataSource.getRepository(Semester);
         const mappingRepo = this.dataSource.getRepository(ProgramCourseMapping);
+
+        // If deferred enrollment until course purchase, skip pre-enrolling with fake PAID status
+        if (approvalData?.deferEnrollmentUntilPurchase) {
+          student.batchId = null as any;
+          student.semesterId = null as any;
+          await this.userRepository.save(student);
+          return { message: 'Student admission approved! Cohort and courses will be assigned upon first course purchase.', student };
+        }
 
         // 1. Ensure Program-level enrollment exists
         let progEnrollment = await this.enrollmentRepository.findOne({
