@@ -510,7 +510,9 @@ export class VimeoService {
     let target = videoIdOrUrl;
     if (target && !target.includes('vimeo.com') && isNaN(Number(target))) {
       try {
-        const lesson = await this.lessonRepo.findOne({ where: { id: target } });
+        const lessonWhere: any = { id: target };
+        if (organizationId) lessonWhere.organizationId = organizationId;
+        const lesson = await this.lessonRepo.findOne({ where: lessonWhere });
         if (lesson && (lesson.videoUrl || lesson.contentUrl)) {
           target = lesson.videoUrl || lesson.contentUrl;
           if (!organizationId) organizationId = lesson.organizationId;

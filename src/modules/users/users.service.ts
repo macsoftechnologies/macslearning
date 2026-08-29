@@ -342,8 +342,10 @@ export class UsersService {
     return createPaginatedResponse(safeData, totalItems, page, limit);
   }
 
-  async getUserById(userId: string) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+  async getUserById(userId: string, organizationId?: string) {
+    const where: any = { id: userId };
+    if (organizationId) where.organizationId = organizationId;
+    const user = await this.userRepository.findOne({ where });
     if (!user) {
       throw new BadRequestException('User not found');
     }

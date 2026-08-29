@@ -636,11 +636,7 @@ export class ContentService {
     studentId?: string,
   ) {
     const lesson = await this.lessonRepository.findOne({
-      where: [
-        { id: lessonId, courseId, organizationId },
-        { id: lessonId, courseId },
-        { id: lessonId }
-      ],
+      where: { id: lessonId, courseId, organizationId },
     });
     if (!lesson) {
       throw new NotFoundException('Lesson not found');
@@ -651,10 +647,7 @@ export class ContentService {
 
     // 1. Check if AI Data exists in Database
     let aiRecord = await this.lessonAiDataRepository.findOne({
-      where: [
-        { lessonId: lesson.id, organizationId: orgId },
-        { lessonId: lesson.id }
-      ]
+      where: { lessonId: lesson.id, organizationId: orgId },
     });
 
     // 2. If not in DB, search JSON file and Auto-Sync to DB
@@ -807,10 +800,7 @@ export class ContentService {
     submitData: { answers: Array<{ questionId: string; selectedIndex: number; questionText?: string }> }
   ) {
     const aiRecord = await this.lessonAiDataRepository.findOne({
-      where: [
-        { lessonId, organizationId },
-        { lessonId }
-      ]
+      where: { lessonId, organizationId },
     });
 
     const fullPool = Array.isArray(aiRecord?.quizPool) ? aiRecord.quizPool : [];
@@ -869,10 +859,7 @@ export class ContentService {
 
   async bulkSyncCourseAiData(courseId: string, organizationId: string) {
     const lessons = await this.lessonRepository.find({
-      where: [
-        { courseId, organizationId, isDeleted: false },
-        { courseId, isDeleted: false },
-      ],
+      where: { courseId, organizationId, isDeleted: false },
     });
 
     const fs = require('fs');
@@ -950,10 +937,7 @@ export class ContentService {
           const parsed = JSON.parse(fileContent);
 
           let existing = await this.lessonAiDataRepository.findOne({
-            where: [
-              { lessonId: lesson.id, organizationId },
-              { lessonId: lesson.id }
-            ]
+            where: { lessonId: lesson.id, organizationId },
           });
 
           if (!existing) {

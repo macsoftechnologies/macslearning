@@ -227,11 +227,11 @@ export class StudentsService {
         ...(student.customProfile || {}),
         ...incomingCustomProfile,
       };
-      await this.userRepository.update({ id: studentId }, { customProfile: mergedCustomProfile });
+      await this.userRepository.update({ id: studentId, organizationId }, { customProfile: mergedCustomProfile });
     }
 
     const updatedStudent = await this.userRepository.findOne({
-      where: { id: studentId },
+      where: { id: studentId, organizationId },
     });
     if (updatedStudent) {
       delete (updatedStudent as any).passwordHash;

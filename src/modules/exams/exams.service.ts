@@ -627,6 +627,7 @@ export class ExamsService {
         ? await this.questionRepository
             .createQueryBuilder('question')
             .where('question.id IN (:...questionIds)', { questionIds })
+            .andWhere('question.organizationId = :organizationId', { organizationId })
             .getMany()
         : [];
 

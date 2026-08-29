@@ -75,13 +75,23 @@ export class RegionsService {
 
   async update(id: string, orgId: string | undefined, updateRegionDto: UpdateRegionDto): Promise<Region> {
     const region = await this.findOne(id, orgId);
-    await this.regionRepository.update(id, updateRegionDto);
+    // Scope mutation to org-owned region (non-global)
+    if (orgId && !region.isGlobal) {
+      await this.regionRepository.update({ id, orgId }, updateRegionDto);
+    } else {
+      await this.regionRepository.update(id, updateRegionDto);
+    }
     return this.findOne(id, orgId);
   }
 
   async remove(id: string, orgId?: string): Promise<Region> {
     const region = await this.findOne(id, orgId);
-    await this.regionRepository.delete(id);
+    // Scope deletion to org-owned region (non-global)
+    if (orgId && !region.isGlobal) {
+      await this.regionRepository.delete({ id, orgId });
+    } else {
+      await this.regionRepository.delete(id);
+    }
     return region;
   }
 }

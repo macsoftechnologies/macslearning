@@ -190,7 +190,7 @@ export class PaymentService {
     if (!paymentRaw) throw new NotFoundException('Payment not found');
 
     const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
+      where: { id: paymentId, organizationId },
     });
     if (!payment) throw new NotFoundException('Payment not found');
 

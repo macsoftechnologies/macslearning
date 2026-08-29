@@ -292,7 +292,7 @@ export class DiscussionService {
       if (thread.threadType === 'DIRECT_MESSAGE') {
         const notifyTargetId = thread.authorId === authorId ? thread.recipientId : thread.authorId;
         if (notifyTargetId) {
-          const sender = await this.userRepository.findOne({ where: { id: authorId } });
+          const sender = await this.userRepository.findOne({ where: { id: authorId, organizationId } });
           await this.notificationsService.createNotification(
             organizationId,
             notifyTargetId,
@@ -305,7 +305,7 @@ export class DiscussionService {
       }
     } catch (e) {}
 
-    const sender = await this.userRepository.findOne({ where: { id: authorId } });
+    const sender = await this.userRepository.findOne({ where: { id: authorId, organizationId } });
 
     return {
       id: savedReply.id,
@@ -367,7 +367,7 @@ export class DiscussionService {
       order: { createdAt: 'ASC' },
     });
     const authorIds = Array.from(new Set(replies.map(r => r.authorId)));
-    const authors = authorIds.length > 0 ? await this.userRepository.find({ where: { id: In(authorIds) } }) : [];
+    const authors = authorIds.length > 0 ? await this.userRepository.find({ where: { id: In(authorIds), organizationId } }) : [];
     const authorMap = new Map(authors.map(u => [u.id, u]));
 
     return replies.map(r => ({

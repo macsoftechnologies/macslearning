@@ -118,7 +118,7 @@ export class LiveSessionsService {
   }
 
   async update(organizationId: string, id: string, data: any) {
-    const session = await this.sessionRepo.findOne({ where: { id } });
+    const session = await this.sessionRepo.findOne({ where: { id, organizationId } });
     if (!session) throw new NotFoundException('Live session not found');
 
     if (data.batchId !== undefined) session.batchId = data.batchId;
@@ -138,7 +138,7 @@ export class LiveSessionsService {
   }
 
   async markAttendance(organizationId: string, id: string, attendeeStudentIds: string[]) {
-    const session = await this.sessionRepo.findOne({ where: { id } });
+    const session = await this.sessionRepo.findOne({ where: { id, organizationId } });
     if (!session) throw new NotFoundException('Live session not found');
 
     session.attendeeStudentIds = JSON.stringify(attendeeStudentIds || []);
@@ -266,7 +266,7 @@ export class LiveSessionsService {
   }
 
   async remove(organizationId: string, id: string) {
-    const session = await this.sessionRepo.findOne({ where: { id } });
+    const session = await this.sessionRepo.findOne({ where: { id, organizationId } });
     if (!session) throw new NotFoundException('Session not found');
     await this.sessionRepo.remove(session);
     return { success: true, message: 'Session deleted successfully' };

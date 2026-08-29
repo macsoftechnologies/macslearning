@@ -44,7 +44,10 @@ export class ProgramsService {
     if (!program) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    const regionConfigs = await this.regionConfigRepository.find({ where: { programId: id } });
+    const regionConfigWhere: any = { programId: id };
+    if (organizationId) regionConfigWhere.organizationId = organizationId;
+    else if (program.organizationId) regionConfigWhere.organizationId = program.organizationId;
+    const regionConfigs = await this.regionConfigRepository.find({ where: regionConfigWhere });
     return { ...program, regionConfigs };
   }
 

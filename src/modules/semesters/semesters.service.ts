@@ -38,9 +38,10 @@ export class SemestersService {
     if (!semester) {
       throw new NotFoundException(`Semester with ID ${id} not found`);
     }
-    const mappings = await this.mappingRepository.find({ 
-      where: organizationId ? { organizationId, semesterId: id } : { semesterId: id } 
-    });
+    const resolvedOrgId = organizationId || semester.organizationId;
+    const mappingWhere: any = { semesterId: id };
+    if (resolvedOrgId) mappingWhere.organizationId = resolvedOrgId;
+    const mappings = await this.mappingRepository.find({ where: mappingWhere });
     const courseIds = mappings
       .filter(m => !semester.programId || m.programId === semester.programId)
       .map(m => m.courseId);
