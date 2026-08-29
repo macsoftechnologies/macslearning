@@ -58,7 +58,7 @@ export class QuestionDto {
   @IsNotEmpty()
   questionText: string;
 
-  @IsEnum(['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER'])
+  @IsEnum(['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'BOOK_REVIEW', 'RESEARCH_PAPER'])
   type: string;
 
   @IsNumber()
