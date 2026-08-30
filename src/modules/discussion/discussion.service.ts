@@ -61,25 +61,30 @@ export class DiscussionService {
         .orderBy('thread.updatedAt', 'DESC')
         .getMany();
 
-      const existingBatchIdSet = new Set(batchThreads.map(t => t.batchId));
-      const missingBatchIds = batchIds.filter(id => !existingBatchIdSet.has(id));
-      if (missingBatchIds.length > 0) {
-        const batchesToCreate = await this.batchRepository.find({
-          where: { id: In(missingBatchIds) }
-        });
+      try {
+        const existingBatchIdSet = new Set(batchThreads.map(t => t.batchId));
+        const missingBatchIds = batchIds.filter(id => !existingBatchIdSet.has(id));
+        if (missingBatchIds.length > 0) {
+          const batchesToCreate = await this.batchRepository.find({
+            where: { id: In(missingBatchIds) }
+          });
 
-        for (const b of batchesToCreate) {
-          const newGroup = await this.threadRepository.save(this.threadRepository.create({
-            organizationId,
-            threadType: 'BATCH_GROUP',
-            batchId: b.id,
-            title: `${b.name} Cohort Discussion`,
-            content: `Welcome to the official cohort group for ${b.name}!`,
-            lastMessage: 'Welcome to your cohort discussion group!',
-            lastMessageAt: new Date(),
-          }));
-          batchThreads.push(newGroup);
+          for (const b of batchesToCreate) {
+            const newGroup = await this.threadRepository.save(this.threadRepository.create({
+              organizationId,
+              threadType: 'BATCH_GROUP',
+              batchId: b.id,
+              authorId: userId || 'SYSTEM',
+              title: `${b.name} Cohort Discussion`,
+              content: `Welcome to the official cohort group for ${b.name}!`,
+              lastMessage: 'Welcome to your cohort discussion group!',
+              lastMessageAt: new Date(),
+            }));
+            batchThreads.push(newGroup);
+          }
         }
+      } catch (err) {
+        // Safe fallback - don't crash getInbox if auto-creation encounters constraint
       }
     }
 

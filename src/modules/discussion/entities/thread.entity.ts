@@ -26,7 +26,7 @@ export class Thread {
   @Column({ type: 'varchar', nullable: true })
   lessonId: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', nullable: true })
   authorId: string;
 
   @Column({ type: 'varchar', nullable: true })
