@@ -154,6 +154,7 @@ export class FacultyService {
   }
 
   async getGradingQueue(organizationId: string, facultyId: string) {
+    try {
     const courses = await this.courseRepository
       .createQueryBuilder('course')
       .where('course.organizationId = :organizationId', { organizationId })
@@ -252,6 +253,10 @@ export class FacultyService {
     );
 
     return queue;
+    } catch (error) {
+      console.error('getGradingQueue error:', error?.message || error);
+      return [];
+    }
   }
 
   async getFacultyDetailsForAdmin(organizationId: string, facultyId: string) {
