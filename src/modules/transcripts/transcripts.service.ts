@@ -221,7 +221,7 @@ export class TranscriptsService {
         doc.font('Helvetica').text(student.fullName || 'Student', 125, startY + 8);
 
         doc.font('Helvetica-Bold').text(`Student ID / Reg:`, 330, startY + 8);
-        doc.font('Helvetica').text(studentId.substring(0, 18), 425, startY + 8);
+        doc.font('Helvetica').text(student.registrationId || studentId.substring(0, 18), 425, startY + 8);
 
         doc.font('Helvetica-Bold').text(`Program:`, 46, startY + 22);
         doc.font('Helvetica').text(program?.name || 'Theological Degree', 125, startY + 22);

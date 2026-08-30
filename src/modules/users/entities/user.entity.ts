@@ -40,6 +40,9 @@ export class User {
   userType: string;
 
   @Column({ type: 'varchar', nullable: true })
+  registrationId: string;
+
+  @Column({ type: 'varchar', nullable: true })
   designation: string;
 
   @Column({ type: 'varchar', nullable: true })

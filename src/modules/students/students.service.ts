@@ -92,6 +92,7 @@ export class StudentsService {
         fullName: userEntity.fullName,
         email: userEntity.email,
         mobile: userEntity.mobile,
+        registrationId: userEntity.registrationId || (userEntity.customProfile as any)?.registrationId || null,
         status: userEntity.status,
         ataStatus: userEntity.ataStatus || (isAtaFlag ? 'ATA' : 'NON_ATA'),
         isAtaStudent: isAtaFlag,
@@ -196,6 +197,10 @@ export class StudentsService {
       },
     });
     if (!student) throw new NotFoundException('Student not found');
+
+    if (updateData.registrationId !== undefined) {
+      student.registrationId = updateData.registrationId ? updateData.registrationId.trim() : null;
+    }
 
     const userUpdateFields = ['fullName', 'mobile', 'regionId', 'ataStatus'];
     const userPayload: any = {};
@@ -368,6 +373,7 @@ export class StudentsService {
     adminId: string,
     organizationId?: string,
     approvalData?: {
+      registrationId?: string;
       admissionNotes?: string;
       batchId?: string;
       semesterId?: string;
@@ -393,6 +399,7 @@ export class StudentsService {
     student.approvedAt = new Date();
 
     if (approvalData) {
+      if (approvalData.registrationId) student.registrationId = approvalData.registrationId.trim();
       if (approvalData.programId) student.programId = approvalData.programId;
       if (approvalData.batchId) student.batchId = approvalData.batchId;
       if (approvalData.semesterId) student.semesterId = approvalData.semesterId;
@@ -470,6 +477,7 @@ export class StudentsService {
         interviewStatus: true,
         interviewDetails: true,
         createdAt: true,
+        registrationId: true,
         customProfile: true,
         regionId: true,
       },
