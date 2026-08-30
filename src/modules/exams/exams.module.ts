@@ -8,6 +8,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { CoursesModule } from '../courses/courses.module';
 import { Course } from '../courses/entities/course.entity';
+import { VideoQuiz } from '../content/entities/video-quiz.entity';
+import { VideoQuizAnswer } from '../content/entities/video-quiz-answer.entity';
 import { User } from '../users/entities/user.entity';
 import { Exam } from './entities/exam.entity';
 import { Question } from './entities/question.entity';
@@ -23,7 +25,7 @@ import { Enrollment } from '../enrollment/entities/enrollment.entity';
     BullModule.registerQueue({
       name: 'exams',
     }),
-    TypeOrmModule.forFeature([Exam, Question, Attempt, AssessmentResult, Enrollment, User, Course]),
+    TypeOrmModule.forFeature([Exam, Question, Attempt, AssessmentResult, Enrollment, User, Course, VideoQuiz, VideoQuizAnswer]),
   ],
   controllers: [ExamsController],
   providers: [ExamsService, ExamsProcessor],

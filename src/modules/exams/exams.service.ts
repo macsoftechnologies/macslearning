@@ -14,6 +14,8 @@ import { AssessmentResult } from '../results/entities/assessmentResult.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CoursesService } from '../courses/courses.service';
 import { Course } from '../courses/entities/course.entity';
+import { VideoQuiz } from '../content/entities/video-quiz.entity';
+import { VideoQuizAnswer } from '../content/entities/video-quiz-answer.entity';
 import { User } from '../users/entities/user.entity';
 import { Enrollment } from '../enrollment/entities/enrollment.entity';
 
@@ -29,6 +31,8 @@ export class ExamsService {
     @InjectRepository(Enrollment) private enrollmentRepository: Repository<Enrollment>,
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Course) private courseRepository: Repository<Course>,
+    @InjectRepository(VideoQuiz) private videoQuizRepository: Repository<VideoQuiz>,
+    @InjectRepository(VideoQuizAnswer) private videoQuizAnswerRepository: Repository<VideoQuizAnswer>,
     @InjectQueue('exams') private examsQueue: Queue,
     private notificationsService: NotificationsService,
     private coursesService: CoursesService,
@@ -780,22 +784,35 @@ export class ExamsService {
 
   
   async getAllSubmissions(organizationId: string, query: any = {}) {
-    const attempts = await this.attemptRepository.find({
-      where: { organizationId },
-      order: { createdAt: 'DESC' },
-    });
+    const [attempts, videoQuizAnswers, videoQuizzes] = await Promise.all([
+      this.attemptRepository.find({
+        where: { organizationId },
+        order: { createdAt: 'DESC' },
+      }),
+      this.videoQuizAnswerRepository.find({
+        where: { organizationId },
+        order: { createdAt: 'DESC' },
+      }),
+      this.videoQuizRepository.find({
+        where: { organizationId },
+      }),
+    ]);
 
     const finishedAttempts = attempts.filter(a => a.status !== 'IN_PROGRESS' || (a.answers && (Array.isArray(a.answers) ? a.answers.length : true)));
-    if (!finishedAttempts.length) return [];
 
     const examIds = [...new Set(finishedAttempts.map(a => a.examId).filter(Boolean))];
-    const studentIds = [...new Set(finishedAttempts.map(a => a.studentId).filter(Boolean))];
+    const studentIds = [...new Set([
+      ...finishedAttempts.map(a => a.studentId).filter(Boolean),
+      ...videoQuizAnswers.map(a => a.studentId).filter(Boolean),
+    ])];
+    const courseIdsFromVideo = videoQuizAnswers.map(a => a.courseId).filter(Boolean);
 
-    const [exams, students, rawEnrollments, questions] = await Promise.all([
+    const [exams, students, rawEnrollments, questions, rawCourses] = await Promise.all([
       examIds.length ? this.examRepository.find({ where: { id: In(examIds), organizationId } }) : [],
       studentIds.length ? this.userRepository.find({ where: { id: In(studentIds), organizationId } }) : [],
       studentIds.length ? this.enrollmentRepository.find({ where: { studentId: In(studentIds), organizationId }, relations: { batch: true } }) : [],
       examIds.length ? this.questionRepository.find({ where: { examId: In(examIds), organizationId, isDeleted: false } }) : [],
+      this.courseRepository.find({ where: { organizationId } }),
     ]);
 
     const examMap = new Map<string, Exam>();
@@ -815,12 +832,14 @@ export class ExamsService {
     const questionMap = new Map<string, Question>();
     questions.forEach(q => questionMap.set(String(q.id), q));
 
-    const courseIds = [...new Set(exams.map(e => e.courseId).filter(Boolean))];
-    const courses = courseIds.length ? await this.courseRepository.find({ where: { id: In(courseIds) } }) : [];
     const courseMap = new Map<string, Course>();
-    courses.forEach(c => courseMap.set(String(c.id), c));
+    rawCourses.forEach(c => courseMap.set(String(c.id), c));
 
-    return finishedAttempts.map(attempt => {
+    const vqMap = new Map<string, VideoQuiz>();
+    videoQuizzes.forEach(vq => vqMap.set(String(vq.id), vq));
+
+    // Map Exam Attempts
+    const examResults = finishedAttempts.map(attempt => {
       const exam = examMap.get(String(attempt.examId));
       const student = studentMap.get(String(attempt.studentId));
       const course = exam ? courseMap.get(String(exam.courseId)) : null;
@@ -859,6 +878,7 @@ export class ExamsService {
         hasBookReviewOrPaper,
         needsGrading: hasPendingGrading,
         questionTypes: Array.from(questionTypesSet),
+        submissionType: 'EXAM',
         exam: {
           id: exam?.id || attempt.examId,
           title: exam?.title || 'Exam',
@@ -881,6 +901,55 @@ export class ExamsService {
         } : null,
       };
     });
+
+    // Map Video Quiz Submissions
+    const videoQuizResults = videoQuizAnswers.map(vqa => {
+      const vq = vqMap.get(String(vqa.quizId));
+      const student = studentMap.get(String(vqa.studentId));
+      const course = courseMap.get(String(vqa.courseId));
+      const enrollment = enrollmentMap.get(`${vqa.studentId}_${vqa.courseId}`) || enrollmentMap.get(String(vqa.studentId));
+
+      const maxMarks = vq?.maxMarks || 1;
+      const marksObtained = vqa.marks ?? (vqa.isCorrect ? maxMarks : 0);
+      const isGraded = vqa.isGraded ?? (vq?.type === 'MCQ' || vq?.type === 'TRUE_FALSE');
+
+      return {
+        attemptId: vqa.id,
+        attemptNumber: 1,
+        status: 'SUBMITTED',
+        submittedAt: vqa.createdAt,
+        marksObtained,
+        percentage: maxMarks > 0 ? (marksObtained / maxMarks) * 100 : 0,
+        isPassed: vqa.isCorrect || marksObtained > 0,
+        hasBookReviewOrPaper: false,
+        needsGrading: !isGraded,
+        questionTypes: ['VIDEO_QUIZ'],
+        submissionType: 'VIDEO_QUIZ',
+        lessonId: vqa.lessonId,
+        exam: {
+          id: vq?.id || vqa.quizId,
+          title: vq?.questionText ? `Video Quiz: ${vq.questionText.substring(0, 45)}...` : 'In-Video Pop-up Quiz',
+          isFinalExam: false,
+          totalMarks: maxMarks,
+          passingPercentage: 70,
+        },
+        course: {
+          id: course?.id || vqa.courseId,
+          title: course?.title || 'Course Subject',
+        },
+        student: {
+          id: student?.id || vqa.studentId,
+          fullName: student?.fullName || 'Student',
+          email: student?.email || '',
+        },
+        batch: enrollment?.batch ? {
+          id: enrollment.batch.id,
+          name: enrollment.batch.name,
+        } : null,
+      };
+    });
+
+    return [...examResults, ...videoQuizResults].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   }
 
   async publishResult(
