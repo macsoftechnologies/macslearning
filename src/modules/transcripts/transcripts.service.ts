@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import PDFDocument from 'pdfkit';
 import { OfflineGrade } from '../manual-grades/entities/offline-grade.entity';
 import { Course } from '../courses/entities/course.entity';
@@ -23,6 +23,22 @@ const GRADE_POINTS: Record<string, number> = {
   'D': 1.0,
   'F': 0.0,
 };
+
+function getPoints(gradeLetter: string, score: number): string {
+  if (gradeLetter && GRADE_POINTS[gradeLetter] !== undefined) {
+    return GRADE_POINTS[gradeLetter].toFixed(1);
+  }
+  if (score >= 80) return '4.0';
+  if (score >= 75) return '4.0';
+  if (score >= 70) return '3.7';
+  if (score >= 65) return '3.3';
+  if (score >= 60) return '3.0';
+  if (score >= 55) return '2.7';
+  if (score >= 50) return '2.3';
+  if (score >= 45) return '2.0';
+  if (score >= 40) return '1.7';
+  return '0.0';
+}
 
 @Injectable()
 export class TranscriptsService {
@@ -48,20 +64,9 @@ export class TranscriptsService {
       ],
     });
 
-    const programId = enrollments.find(e => e.programId)?.programId;
-    const batchId = enrollments.find(e => e.batchId)?.batchId;
+    const programId = student.programId || enrollments.find(e => e.programId)?.programId;
 
-    let program: Program | null = null;
-    let batch: AcademicBatch | null = null;
-
-    if (programId) {
-      program = await this.programRepository.findOne({ where: { id: programId, organizationId } });
-    }
-    if (batchId) {
-      batch = await this.batchRepository.findOne({ where: { id: batchId, organizationId } });
-    }
-
-    // 2. Fetch All Semesters for this Program / Organization
+    // 2. Fetch All Semesters
     let semesters = await this.semesterRepository.find({
       where: programId ? { organizationId, programId } : { organizationId },
       order: { createdAt: 'ASC' },
@@ -74,7 +79,7 @@ export class TranscriptsService {
       });
     }
 
-    // 3. Fetch All Program Courses
+    // 3. Fetch All Courses
     let allCourses = await this.courseRepository.find({
       where: programId ? { organizationId, programId, isDeleted: false } : { organizationId, isDeleted: false },
       order: { createdAt: 'ASC' },
@@ -100,238 +105,247 @@ export class TranscriptsService {
       }
     }
 
-    // 5. Build Semester-Wise Structured Curriculum
-    interface TranscriptRow {
-      semesterName: string;
-      courseName: string;
-      creditEarned: number;
-      marks: string;
-      grade: string;
-      points: string;
-      isCompleted: boolean;
+    // 5. Structure by Semester
+    interface SemesterGroup {
+      name: string;
+      courses: {
+        title: string;
+        credits: number;
+        marks: string;
+        grade: string;
+        points: string;
+        isCompleted: boolean;
+      }[];
     }
 
-    const rows: TranscriptRow[] = [];
-    const assignedCourseIds = new Set<string>();
+    const semesterGroups: SemesterGroup[] = [];
+    const usedCourseIds = new Set<string>();
 
-    if (semesters.length > 0) {
-      for (const sem of semesters) {
-        const semCourses = allCourses.filter(c => c.semesterId === sem.id);
-        const semLabel = sem.name || sem.term || 'Semester';
+    for (const sem of semesters) {
+      const semLabel = sem.name || sem.term || 'Semester';
+      const matchedCourses = allCourses.filter(c => c.semesterId === sem.id);
 
-        if (semCourses.length > 0) {
-          for (const c of semCourses) {
-            assignedCourseIds.add(c.id);
-            const gr = gradeMap.get(c.id);
-            const isCompleted = !!gr && Number(gr.totalScore) > 0;
-            const pointsVal = isCompleted && gr.grade ? (GRADE_POINTS[gr.grade] !== undefined ? GRADE_POINTS[gr.grade].toFixed(1) : '3.0') : '';
+      if (matchedCourses.length > 0) {
+        const mapped = matchedCourses.map(c => {
+          usedCourseIds.add(c.id);
+          const gr = gradeMap.get(c.id);
+          const isCompleted = !!gr && Number(gr.totalScore) > 0;
+          return {
+            title: c.title,
+            credits: Number(c.credits) || 3,
+            marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
+            grade: isCompleted ? String(gr.grade || '') : '',
+            points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
+            isCompleted,
+          };
+        });
 
-            rows.push({
-              semesterName: semLabel,
-              courseName: c.title,
-              creditEarned: Number(c.credits) || 3,
-              marks: isCompleted ? String(gr.totalScore) : '',
-              grade: isCompleted ? String(gr.grade || '') : '',
-              points: pointsVal,
-              isCompleted,
-            });
-          }
-        }
+        semesterGroups.push({
+          name: semLabel,
+          courses: mapped,
+        });
       }
     }
 
-    // Remaining courses not explicitly mapped to a semester
-    const remainingCourses = allCourses.filter(c => !assignedCourseIds.has(c.id));
-    if (remainingCourses.length > 0) {
-      for (const c of remainingCourses) {
+    // Handle courses without a semester mapping
+    const unassignedCourses = allCourses.filter(c => !usedCourseIds.has(c.id));
+    if (unassignedCourses.length > 0) {
+      const mapped = unassignedCourses.map(c => {
         const gr = gradeMap.get(c.id);
         const isCompleted = !!gr && Number(gr.totalScore) > 0;
-        const pointsVal = isCompleted && gr.grade ? (GRADE_POINTS[gr.grade] !== undefined ? GRADE_POINTS[gr.grade].toFixed(1) : '3.0') : '';
-
-        rows.push({
-          semesterName: 'Electives / Core',
-          courseName: c.title,
-          creditEarned: Number(c.credits) || 3,
-          marks: isCompleted ? String(gr.totalScore) : '',
+        return {
+          title: c.title,
+          credits: Number(c.credits) || 3,
+          marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
           grade: isCompleted ? String(gr.grade || '') : '',
-          points: pointsVal,
+          points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
           isCompleted,
-        });
-      }
+        };
+      });
+
+      semesterGroups.push({
+        name: semesterGroups.length === 0 ? 'First Semester' : 'Core Courses',
+        courses: mapped,
+      });
     }
 
-    // Fallback: If no courses found from program, use grades directly
-    if (rows.length === 0 && allGrades.length > 0) {
-      for (const gr of allGrades) {
-        const course = allCourses.find(c => c.id === gr.courseId);
-        const pointsVal = gr.grade ? (GRADE_POINTS[gr.grade] !== undefined ? GRADE_POINTS[gr.grade].toFixed(1) : '3.0') : '';
-        rows.push({
-          semesterName: 'Core Semester',
-          courseName: course?.title || 'Academic Subject',
-          creditEarned: Number(course?.credits) || 3,
-          marks: String(gr.totalScore),
+    // Fallback: If no courses found from curriculum, use grade records directly
+    if (semesterGroups.length === 0 && allGrades.length > 0) {
+      const mapped = allGrades.map(gr => {
+        const c = allCourses.find(item => item.id === gr.courseId);
+        return {
+          title: c?.title || 'Academic Course',
+          credits: Number(c?.credits) || 3,
+          marks: String(Math.round(Number(gr.totalScore))),
           grade: String(gr.grade || ''),
-          points: pointsVal,
+          points: getPoints(gr.grade, Number(gr.totalScore)),
           isCompleted: true,
-        });
-      }
+        };
+      });
+
+      semesterGroups.push({
+        name: 'First Semester',
+        courses: mapped,
+      });
     }
 
-    // 6. Calculate Totals
+    // 6. Compute Totals
     let totalCredits = 0;
     let totalMarks = 0;
     let totalPoints = 0;
     let completedCount = 0;
 
-    for (const r of rows) {
-      if (r.isCompleted) {
-        totalCredits += r.creditEarned;
-        totalMarks += Number(r.marks) || 0;
-        totalPoints += Number(r.points) || 0;
-        completedCount++;
-      } else {
-        totalCredits += r.creditEarned;
+    for (const g of semesterGroups) {
+      for (const c of g.courses) {
+        totalCredits += c.credits;
+        if (c.isCompleted) {
+          totalMarks += Number(c.marks) || 0;
+          totalPoints += Number(c.points) || 0;
+          completedCount++;
+        }
       }
     }
 
-    const gpa = completedCount > 0 ? (totalPoints / completedCount).toFixed(1) : '';
-    const avgScore = completedCount > 0 ? (totalMarks / completedCount).toFixed(1) : '';
+    const avgMarks = completedCount > 0 ? (totalMarks / completedCount).toFixed(1) : '';
 
-    // 7. Render PDF Document
+    // 7. Render Exact Sample Transcript Table via PDFKit
     return new Promise((resolve, reject) => {
       try {
-        const doc = new PDFDocument({ size: 'A4', margin: 36 });
-        const buffers: Buffer[] = [];
+        const doc = new PDFDocument({
+          size: 'A4',
+          margin: 20,
+          info: { Title: 'Official Academic Transcript' }
+        });
 
+        const buffers: Buffer[] = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-        // Header Section
-        doc.fontSize(16).font('Helvetica-Bold').fillColor('#1e293b').text('GLOBAL ONLINE – ATA ACCREDITED', { align: 'center' });
-        doc.fontSize(13).font('Helvetica-Bold').fillColor('#334155').text('COTR Theological Seminary', { align: 'center' });
-        doc.fontSize(11).font('Helvetica').fillColor('#64748b').text('Official Academic Record & Transcript', { align: 'center' });
-        doc.moveDown(0.7);
+        // Define exact grid column widths: total 555 pt (fits A4 perfectly)
+        const startX = 20;
+        let startY = 24;
+        const colW = {
+          semester: 115,
+          course: 220,
+          credits: 80,
+          marks: 45,
+          grade: 45,
+          points: 50,
+        };
+        const totalW = colW.semester + colW.course + colW.credits + colW.marks + colW.grade + colW.points; // 555 pt
 
-        // Student Info Box
-        const startY = doc.y;
-        doc.rect(36, startY, 523, 50).fillAndStroke('#f8fafc', '#cbd5e1');
+        // Function to draw Table Header
+        const drawTableHeader = (y: number) => {
+          const headerH = 20;
+          doc.lineWidth(0.75);
+          doc.rect(startX, y, totalW, headerH).stroke('#000000');
 
-        doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
-        doc.text(`Student Name:`, 46, startY + 8);
-        doc.font('Helvetica').text(student.fullName || 'Student', 125, startY + 8);
+          // Divider lines
+          let curX = startX;
+          [colW.semester, colW.course, colW.credits, colW.marks, colW.grade].forEach(w => {
+            curX += w;
+            doc.moveTo(curX, y).lineTo(curX, y + headerH).stroke('#000000');
+          });
 
-        doc.font('Helvetica-Bold').text(`Student ID / Reg:`, 330, startY + 8);
-        doc.font('Helvetica').text(student.registrationId || studentId.substring(0, 18), 425, startY + 8);
+          doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000');
+          doc.text('Semester', startX, y + 5, { width: colW.semester, align: 'center' });
+          doc.text('Course Name', startX + colW.semester, y + 5, { width: colW.course, align: 'center' });
+          doc.text('Credit Earned', startX + colW.semester + colW.course, y + 5, { width: colW.credits, align: 'center' });
+          doc.text('Marks', startX + colW.semester + colW.course + colW.credits, y + 5, { width: colW.marks, align: 'center' });
+          doc.text('Grade', startX + colW.semester + colW.course + colW.credits + colW.marks, y + 5, { width: colW.grade, align: 'center' });
+          doc.text('Points', startX + colW.semester + colW.course + colW.credits + colW.marks + colW.grade, y + 5, { width: colW.points, align: 'center' });
 
-        doc.font('Helvetica-Bold').text(`Program:`, 46, startY + 22);
-        doc.font('Helvetica').text(program?.name || 'Theological Degree', 125, startY + 22);
+          return y + headerH;
+        };
 
-        doc.font('Helvetica-Bold').text(`Batch / Cohort:`, 330, startY + 22);
-        doc.font('Helvetica').text(batch?.name || 'Academic Batch', 425, startY + 22);
+        startY = drawTableHeader(startY);
 
-        doc.font('Helvetica-Bold').text(`Date Issued:`, 46, startY + 36);
-        doc.font('Helvetica').text(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), 125, startY + 36);
-
-        doc.font('Helvetica-Bold').text(`Conduct:`, 330, startY + 36);
-        doc.font('Helvetica').text(conduct || 'Satisfactory', 425, startY + 36);
-
-        doc.y = startY + 60;
-
-        // Table Header
-        const tableX = 36;
-        let curY = doc.y;
-        const colW = { sem: 105, course: 220, credits: 55, marks: 45, grade: 45, points: 53 };
-
-        doc.rect(tableX, curY, 523, 20).fillAndStroke('#e2e8f0', '#94a3b8');
-        doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold');
-
-        doc.text('Semester', tableX + 6, curY + 6, { width: colW.sem });
-        doc.text('Course Name', tableX + colW.sem + 6, curY + 6, { width: colW.course });
-        doc.text('Credit Earned', tableX + colW.sem + colW.course, curY + 6, { width: colW.credits, align: 'center' });
-        doc.text('Marks', tableX + colW.sem + colW.course + colW.credits, curY + 6, { width: colW.marks, align: 'center' });
-        doc.text('Grade', tableX + colW.sem + colW.course + colW.credits + colW.marks, curY + 6, { width: colW.grade, align: 'center' });
-        doc.text('Points', tableX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY + 6, { width: colW.points, align: 'center' });
-
-        curY += 20;
-
-        // Group rows by semester for clean vertical grouping
-        let lastSemester = '';
         const rowHeight = 17;
 
-        for (let i = 0; i < rows.length; i++) {
-          const r = rows[i];
+        for (const semGroup of semesterGroups) {
+          const groupCount = semGroup.courses.length;
+          const groupHeight = groupCount * rowHeight;
 
-          // Check for page break
-          if (curY + rowHeight > 750) {
+          // Page break check
+          if (startY + groupHeight > 800) {
             doc.addPage();
-            curY = 36;
-            // Redraw Header
-            doc.rect(tableX, curY, 523, 20).fillAndStroke('#e2e8f0', '#94a3b8');
-            doc.fillColor('#0f172a').fontSize(8.5).font('Helvetica-Bold');
-            doc.text('Semester', tableX + 6, curY + 6, { width: colW.sem });
-            doc.text('Course Name', tableX + colW.sem + 6, curY + 6, { width: colW.course });
-            doc.text('Credit Earned', tableX + colW.sem + colW.course, curY + 6, { width: colW.credits, align: 'center' });
-            doc.text('Marks', tableX + colW.sem + colW.course + colW.credits, curY + 6, { width: colW.marks, align: 'center' });
-            doc.text('Grade', tableX + colW.sem + colW.course + colW.credits + colW.marks, curY + 6, { width: colW.grade, align: 'center' });
-            doc.text('Points', tableX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY + 6, { width: colW.points, align: 'center' });
-            curY += 20;
+            startY = drawTableHeader(24);
           }
 
-          const showSem = r.semesterName !== lastSemester;
-          lastSemester = r.semesterName;
+          const semBlockTop = startY;
 
-          doc.rect(tableX, curY, 523, rowHeight).stroke('#cbd5e1');
+          // 1. Draw outer semester rectangle
+          doc.lineWidth(0.75);
+          doc.rect(startX, semBlockTop, colW.semester, groupHeight).stroke('#000000');
 
-          // Vertical Column Dividers
-          let dividerX = tableX;
-          doc.moveTo(dividerX + colW.sem, curY).lineTo(dividerX + colW.sem, curY + rowHeight).stroke('#cbd5e1');
-          doc.moveTo(dividerX + colW.sem + colW.course, curY).lineTo(dividerX + colW.sem + colW.course, curY + rowHeight).stroke('#cbd5e1');
-          doc.moveTo(dividerX + colW.sem + colW.course + colW.credits, curY).lineTo(dividerX + colW.sem + colW.course + colW.credits, curY + rowHeight).stroke('#cbd5e1');
-          doc.moveTo(dividerX + colW.sem + colW.course + colW.credits + colW.marks, curY).lineTo(dividerX + colW.sem + colW.course + colW.credits + colW.marks, curY + rowHeight).stroke('#cbd5e1');
-          doc.moveTo(dividerX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY).lineTo(dividerX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY + rowHeight).stroke('#cbd5e1');
+          // Centered Semester Label
+          doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000');
+          const semTextY = semBlockTop + (groupHeight / 2) - 5;
+          doc.text(semGroup.name, startX + 4, semTextY, { width: colW.semester - 8, align: 'center' });
 
-          doc.fillColor('#0f172a').fontSize(8);
+          // 2. Draw each course row inside this semester
+          for (let i = 0; i < semGroup.courses.length; i++) {
+            const c = semGroup.courses[i];
+            const rowY = semBlockTop + (i * rowHeight);
 
-          if (showSem) {
-            doc.font('Helvetica-Bold').text(r.semesterName, tableX + 6, curY + 4, { width: colW.sem - 10, lineBreak: false });
+            // Draw full row box starting from Course column
+            const rightStartX = startX + colW.semester;
+            const rightWidth = totalW - colW.semester;
+            doc.rect(rightStartX, rowY, rightWidth, rowHeight).stroke('#000000');
+
+            // Draw vertical column dividers for course, credits, marks, grade
+            let curX = rightStartX;
+            [colW.course, colW.credits, colW.marks, colW.grade].forEach(w => {
+              curX += w;
+              doc.moveTo(curX, rowY).lineTo(curX, rowY + rowHeight).stroke('#000000');
+            });
+
+            // Text Content
+            doc.font('Helvetica').fontSize(8).fillColor('#000000');
+            // Course Name (Left aligned with padding)
+            doc.text(c.title, rightStartX + 6, rowY + 4.5, { width: colW.course - 12, lineBreak: false });
+
+            // Credit Earned (Centered)
+            doc.text(String(c.credits), rightStartX + colW.course, rowY + 4.5, { width: colW.credits, align: 'center' });
+
+            // Marks (Centered, blank if not completed)
+            doc.text(c.marks, rightStartX + colW.course + colW.credits, rowY + 4.5, { width: colW.marks, align: 'center' });
+
+            // Grade (Centered, blank if not completed)
+            doc.text(c.grade, rightStartX + colW.course + colW.credits + colW.marks, rowY + 4.5, { width: colW.grade, align: 'center' });
+
+            // Points (Centered, blank if not completed)
+            doc.text(c.points, rightStartX + colW.course + colW.credits + colW.marks + colW.grade, rowY + 4.5, { width: colW.points, align: 'center' });
           }
 
-          doc.font('Helvetica').text(r.courseName, tableX + colW.sem + 6, curY + 4, { width: colW.course - 10, lineBreak: false });
-          doc.text(String(r.creditEarned), tableX + colW.sem + colW.course, curY + 4, { width: colW.credits, align: 'center' });
-          
-          // Marks, Grade, Points (blank if not completed)
-          doc.font('Helvetica-Bold');
-          doc.text(r.marks, tableX + colW.sem + colW.course + colW.credits, curY + 4, { width: colW.marks, align: 'center' });
-          doc.text(r.grade, tableX + colW.sem + colW.course + colW.credits + colW.marks, curY + 4, { width: colW.grade, align: 'center' });
-          doc.text(r.points, tableX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY + 4, { width: colW.points, align: 'center' });
-
-          curY += rowHeight;
+          startY += groupHeight;
         }
 
-        // Summary Total Row
-        doc.rect(tableX, curY, 523, 20).fillAndStroke('#f1f5f9', '#94a3b8');
-        doc.fillColor('#0f172a').fontSize(9).font('Helvetica-Bold');
-
-        doc.text('Total', tableX + 6, curY + 5, { width: colW.sem });
-        doc.text(String(totalCredits), tableX + colW.sem + colW.course, curY + 5, { width: colW.credits, align: 'center' });
-        doc.text(completedCount > 0 ? String(totalMarks) : '', tableX + colW.sem + colW.course + colW.credits, curY + 5, { width: colW.marks, align: 'center' });
-        doc.text(completedCount > 0 ? `Avg: ${avgScore}` : '', tableX + colW.sem + colW.course + colW.credits + colW.marks, curY + 5, { width: colW.grade, align: 'center' });
-        doc.text(gpa ? `GPA: ${gpa}` : '', tableX + colW.sem + colW.course + colW.credits + colW.marks + colW.grade, curY + 5, { width: colW.points, align: 'center' });
-
-        curY += 35;
-
-        // Signature & Seal Block
-        if (curY + 50 > 750) {
+        // Total Row at the bottom
+        const totalRowHeight = 20;
+        if (startY + totalRowHeight > 800) {
           doc.addPage();
-          curY = 50;
+          startY = drawTableHeader(24);
         }
 
-        doc.fontSize(8.5).font('Helvetica');
-        doc.text('_____________________________', 46, curY + 25);
-        doc.font('Helvetica-Bold').text('Registrar / Academic Dean', 46, curY + 38);
+        // Total box
+        doc.lineWidth(0.75);
+        doc.rect(startX, startY, totalW, totalRowHeight).stroke('#000000');
 
-        doc.font('Helvetica').text('_____________________________', 370, curY + 25);
-        doc.font('Helvetica-Bold').text('President / Principal', 370, curY + 38);
+        // Vertical dividers
+        let curX = startX + colW.semester + colW.course;
+        doc.moveTo(curX, startY).lineTo(curX, startY + totalRowHeight).stroke('#000000');
+
+        [colW.credits, colW.marks, colW.grade].forEach(w => {
+          curX += w;
+          doc.moveTo(curX, startY).lineTo(curX, startY + totalRowHeight).stroke('#000000');
+        });
+
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000');
+        doc.text('Total', startX + 8, startY + 5, { width: colW.semester + colW.course - 16 });
+        doc.text(String(totalCredits), startX + colW.semester + colW.course, startY + 5, { width: colW.credits, align: 'center' });
+        doc.text(completedCount > 0 ? String(totalMarks) : '', startX + colW.semester + colW.course + colW.credits, startY + 5, { width: colW.marks, align: 'center' });
+        doc.text(completedCount > 0 ? String(avgMarks) : '', startX + colW.semester + colW.course + colW.credits + colW.marks + colW.grade, startY + 5, { width: colW.points, align: 'center' });
 
         doc.end();
       } catch (err) {
