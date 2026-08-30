@@ -5,6 +5,7 @@ import { OfflineGrade } from './entities/offline-grade.entity';
 import { Enrollment } from '../enrollment/entities/enrollment.entity';
 import { User } from '../users/entities/user.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
+import { Semester } from '../semesters/entities/semester.entity';
 
 @Injectable()
 export class ManualGradesService {
@@ -109,7 +110,25 @@ export class ManualGradesService {
       }
     }
 
-    // 6. Get Attendance Results (5% Weightage from Live Sessions)
+    // 6. Get Semester Weightage (dynamic per-program/semester)
+    let ciaWeight = 65; // Default: 65% CIA
+    let attWeight = 5;  // Default: 5% Attendance
+    let examWeight = 30; // Default: 30% Final Exam
+    if (semesterId) {
+      try {
+        const semester = await this.enrollmentRepository.manager.getRepository(Semester).findOne({ where: { id: semesterId } });
+        if (semester) {
+          ciaWeight = semester.internalWeightage ?? 65;
+          attWeight = semester.attendanceWeightage ?? 5;
+          examWeight = semester.finalExamWeightage ?? 30;
+        }
+      } catch (e) {}
+    }
+    const ciaFraction = ciaWeight / 100; // e.g., 0.65 or 0.55
+    const examFraction = examWeight / 100; // e.g., 0.30 or 0.40
+    const maxCiaAtt = ciaWeight + attWeight; // e.g., 70 or 60
+
+    // 7. Get Attendance Results (Weightage from Live Sessions)
     let attendanceScoreMap: Record<string, number> = {};
     try {
       const liveSessions = await this.enrollmentRepository.manager.createQueryBuilder()
@@ -132,15 +151,15 @@ export class ManualGradesService {
       }
     } catch (e) {}
 
-    // 7. Combine into 70% Automated Assessment (65% Quizzes/Exams + 5% Attendance) + 30% Final Exam
+    // 8. Combine using dynamic weightage: CIA% + Attendance% + Final Exam%
     const results = enrollments.map(enrollment => {
       const student = students.find(s => s.id === enrollment.studentId);
       const grade = existingGrades.find(g => g.studentId === enrollment.studentId);
 
-      let assignmentScore70 = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : null;
+      let assignmentScoreCiaAtt = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : null;
 
-      // Auto-compute 70% Automated Assessment if not already manually saved
-      if (assignmentScore70 === null) {
+      // Auto-compute CIA + Attendance if not already manually saved
+      if (assignmentScoreCiaAtt === null) {
         let internalPercentages: number[] = [];
 
         // In-video quizzes percentage
@@ -155,27 +174,27 @@ export class ManualGradesService {
           internalPercentages.push(nfe.totalScorePct / nfe.count);
         }
 
-        let ciaComponent65 = 0;
+        let ciaComponent = 0;
         if (internalPercentages.length > 0) {
           const avgCiaPct = internalPercentages.reduce((a, b) => a + b, 0) / internalPercentages.length;
-          ciaComponent65 = (avgCiaPct * 0.65);
+          ciaComponent = (avgCiaPct * ciaFraction);
         }
 
-        const attendanceComponent5 = attendanceScoreMap[enrollment.studentId] || 0;
-        assignmentScore70 = Math.min(70, Math.round((ciaComponent65 + attendanceComponent5) * 100) / 100);
+        const attendanceComponent = attendanceScoreMap[enrollment.studentId] || 0;
+        assignmentScoreCiaAtt = Math.min(maxCiaAtt, Math.round((ciaComponent + attendanceComponent) * 100) / 100);
       }
 
-      let finalExamScore30 = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null 
+      let finalExamScoreWeighted = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null 
         ? Number(grade.finalExamScore) 
-        : (finalExamOnlineMap[enrollment.studentId] !== undefined ? Math.round((finalExamOnlineMap[enrollment.studentId] * 0.30) * 100) / 100 : 0);
+        : (finalExamOnlineMap[enrollment.studentId] !== undefined ? Math.round((finalExamOnlineMap[enrollment.studentId] * examFraction) * 100) / 100 : 0);
 
-      const totalScore = Math.min(100, Math.round((Number(assignmentScore70) + Number(finalExamScore30)) * 100) / 100);
+      const totalScore = Math.min(100, Math.round((Number(assignmentScoreCiaAtt) + Number(finalExamScoreWeighted)) * 100) / 100);
       const gradeLetter = this.calculateGradeLetter(totalScore);
 
-      let ciaScore65 = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : null;
-      let attScore5 = grade?.attendanceScore !== undefined && grade?.attendanceScore !== null ? Number(grade.attendanceScore) : null;
+      let ciaScoreWeighted = grade?.assignmentScore !== undefined && grade?.assignmentScore !== null ? Number(grade.assignmentScore) : null;
+      let attScoreWeighted = grade?.attendanceScore !== undefined && grade?.attendanceScore !== null ? Number(grade.attendanceScore) : null;
 
-      if (ciaScore65 === null) {
+      if (ciaScoreWeighted === null) {
         let internalPercentages: number[] = [];
         const vq = videoQuizMap[enrollment.studentId];
         if (vq && vq.total > 0) internalPercentages.push((vq.correct / vq.total) * 100);
@@ -184,21 +203,21 @@ export class ManualGradesService {
 
         if (internalPercentages.length > 0) {
           const avgCiaPct = internalPercentages.reduce((a, b) => a + b, 0) / internalPercentages.length;
-          ciaScore65 = Math.min(65, Math.round((avgCiaPct * 0.65) * 100) / 100);
+          ciaScoreWeighted = Math.min(ciaWeight, Math.round((avgCiaPct * ciaFraction) * 100) / 100);
         } else {
-          ciaScore65 = 0;
+          ciaScoreWeighted = 0;
         }
       }
 
-      if (attScore5 === null) {
-        attScore5 = attendanceScoreMap[enrollment.studentId] !== undefined ? attendanceScoreMap[enrollment.studentId] : 5;
+      if (attScoreWeighted === null) {
+        attScoreWeighted = attendanceScoreMap[enrollment.studentId] !== undefined ? attendanceScoreMap[enrollment.studentId] : attWeight;
       }
 
-      let finalScore30 = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null 
+      let finalScoreWeighted = grade?.finalExamScore !== undefined && grade?.finalExamScore !== null 
         ? Number(grade.finalExamScore) 
-        : (finalExamOnlineMap[enrollment.studentId] !== undefined ? Math.round((finalExamOnlineMap[enrollment.studentId] * 0.30) * 100) / 100 : 0);
+        : (finalExamOnlineMap[enrollment.studentId] !== undefined ? Math.round((finalExamOnlineMap[enrollment.studentId] * examFraction) * 100) / 100 : 0);
 
-      const calculatedTotal = Math.min(100, Math.round((Number(ciaScore65) + Number(attScore5) + Number(finalScore30)) * 100) / 100);
+      const calculatedTotal = Math.min(100, Math.round((Number(ciaScoreWeighted) + Number(attScoreWeighted) + Number(finalScoreWeighted)) * 100) / 100);
       const calculatedGrade = this.calculateGradeLetter(calculatedTotal);
 
       return {
@@ -208,12 +227,13 @@ export class ManualGradesService {
           lastName: '',
           email: student?.email || '',
         },
-        assignmentScore: ciaScore65, // 65% Internal Assessment
-        attendanceScore: attScore5,  // 5% Attendance
-        finalExamScore: finalScore30, // 30% Final Exam
+        assignmentScore: ciaScoreWeighted, // CIA% Internal Assessment
+        attendanceScore: attScoreWeighted,  // Attendance%
+        finalExamScore: finalScoreWeighted, // Final Exam%
         totalScore: calculatedTotal,
         grade: calculatedGrade,
         isGraded: !!grade,
+        weightage: { cia: ciaWeight, attendance: attWeight, finalExam: examWeight },
       };
     });
 
