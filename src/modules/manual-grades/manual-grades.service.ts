@@ -225,22 +225,11 @@ export class ManualGradesService {
     for (const data of gradesData) {
       const { studentId, courseId, semesterId, academicBatchId, assignmentScore, attendanceScore, finalExamScore, organizationId } = data;
       
-      let score70 = Number(assignmentScore) || 0;
+      let score65 = Number(assignmentScore) || 0;
+      let attScore5 = Number(attendanceScore) !== undefined && attendanceScore !== null ? Number(attendanceScore) : 0;
+      let score30 = Number(finalExamScore) || 0;
       
-      // If assignmentScore wasn't provided directly and student has online exams, calculate 70%
-      if ((assignmentScore === undefined || assignmentScore === null) && studentId && courseId) {
-        const onlineResults = await this.assessmentResultRepository.find({
-          where: { studentId, courseId, organizationId }
-        });
-        if (onlineResults.length > 0) {
-          const totalPct = onlineResults.reduce((acc, r) => acc + (r.percentage || 0), 0);
-          const avgPct = totalPct / onlineResults.length;
-          score70 = Math.round((avgPct * 0.70) * 100) / 100;
-        }
-      }
-
-      const score30 = Number(finalExamScore) || 0;
-      const totalScore = Math.min(100, Math.round((score70 + score30) * 100) / 100);
+      const totalScore = Math.min(100, Math.round((score65 + attScore5 + score30) * 100) / 100);
       const grade = this.calculateGradeLetter(totalScore);
 
       // Find all existing records for this student and course
@@ -258,7 +247,8 @@ export class ManualGradesService {
 
       if (existingList.length > 0) {
         const [primary, ...duplicates] = existingList;
-        primary.assignmentScore = score70;
+        primary.assignmentScore = score65;
+        primary.attendanceScore = attScore5;
         primary.finalExamScore = score30;
         primary.totalScore = totalScore;
         primary.grade = grade;
@@ -278,7 +268,8 @@ export class ManualGradesService {
           semesterId: semVal || undefined,
           academicBatchId: batchVal || undefined,
           organizationId,
-          assignmentScore: score70,
+          assignmentScore: score65,
+          attendanceScore: attScore5,
           finalExamScore: score30,
           totalScore,
           grade,
