@@ -338,6 +338,21 @@ export class ExamsController {
     return this.examsService.getExamResults(req.user.organizationId, examId);
   }
 
+  @Patch('exams/:examId/attempts/:attemptId/publish')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
+  async publishAttempt(
+    @Request() req: any,
+    @Param('examId') examId: string,
+    @Param('attemptId') attemptId: string,
+  ) {
+    return this.examsService.publishAttempt(
+      req.user.organizationId,
+      examId,
+      attemptId,
+      req.user.userId,
+    );
+  }
+
   @Patch('results/:resultId/publish')
   @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
   async publishResult(

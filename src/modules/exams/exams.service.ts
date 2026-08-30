@@ -952,6 +952,62 @@ export class ExamsService {
     return [...examResults, ...videoQuizResults].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   }
 
+  async publishAttempt(
+    organizationId: string,
+    examId: string,
+    attemptId: string,
+    gradedBy: string,
+  ) {
+    const attempt = await this.attemptRepository.findOne({
+      where: { id: attemptId, examId, organizationId },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+
+    const exam = await this.getExamById(organizationId, examId);
+    let result = await this.resultRepository.findOne({
+      where: { examId, studentId: attempt.studentId, organizationId },
+    });
+
+    if (!result) {
+      result = this.resultRepository.create({
+        organizationId,
+        studentId: attempt.studentId,
+        courseId: exam.courseId,
+        examId,
+        attemptId: attempt.id,
+        marksObtained: attempt.marksObtained,
+        totalMarks: exam.totalMarks,
+        percentage: attempt.percentage,
+        isPassed: attempt.isPassed,
+        isPublished: true,
+        publishedAt: new Date(),
+        gradedBy,
+      });
+    } else {
+      result.isPublished = true;
+      result.publishedAt = new Date();
+      result.gradedBy = gradedBy;
+      result.marksObtained = attempt.marksObtained;
+      result.percentage = attempt.percentage;
+      result.isPassed = attempt.isPassed;
+    }
+
+    await this.resultRepository.save(result);
+
+    try {
+      await this.notificationsService.createNotification(
+        organizationId,
+        result.studentId,
+        'Exam Result Published',
+        `Your final result for "${exam.title}" has been published. Score: ${result.marksObtained}/${exam.totalMarks} (${Math.round(result.percentage)}%).`,
+        'RESULT',
+        '/student/results',
+      );
+    } catch (e) {}
+
+    return result;
+  }
+
   async publishResult(
     organizationId: string,
     resultId: string,
