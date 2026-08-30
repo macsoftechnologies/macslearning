@@ -320,6 +320,8 @@ export class ExamsService {
           questionId: answer.questionId,
           selectedOption: answer.selectedOption,
           textAnswer: answer.textAnswer,
+          fileUrl: answer.fileUrl || existing.fileUrl || null,
+          fileName: answer.fileName || existing.fileName || null,
           isCorrect: existing.isCorrect || false,
           marks: existing.marks ?? 0,
           isGraded: existing.isGraded || false,
