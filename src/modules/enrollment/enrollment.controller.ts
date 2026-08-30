@@ -84,7 +84,7 @@ export class EnrollmentController {
   }
 
   @Get()
-  @Roles('ORG_USER')
+  @Roles('ORG_USER', 'FACULTY', 'SUPER_ADMIN')
   async getEnrollments(
     @Request() req: any,
     @Query() query: PaginationQueryDto, @Query('batchId') batchId?: string,

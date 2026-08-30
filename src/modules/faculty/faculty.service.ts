@@ -194,8 +194,6 @@ export class FacultyService {
         .addSelect('sub.createdAt', 'createdAt')
         .addSelect('sub.updatedAt', 'updatedAt')
         .addSelect('student.fullName', 'student_fullName')
-        .addSelect('student.firstName', 'student_firstName')
-        .addSelect('student.lastName', 'student_lastName')
         .orderBy('sub.createdAt', 'ASC')
         .getRawMany();
     }
@@ -225,8 +223,6 @@ export class FacultyService {
         .addSelect('attempt.createdAt', 'createdAt')
         .addSelect('attempt.updatedAt', 'updatedAt')
         .addSelect('student.fullName', 'student_fullName')
-        .addSelect('student.firstName', 'student_firstName')
-        .addSelect('student.lastName', 'student_lastName')
         .orderBy('attempt.createdAt', 'ASC')
         .getRawMany();
     }
@@ -237,10 +233,7 @@ export class FacultyService {
         type: 'assignment',
         title: assignmentMap[s.assignmentId]?.title,
         courseName: courseMap[assignmentMap[s.assignmentId]?.courseId],
-        studentName:
-          `${s.student_firstName || ''} ${s.student_lastName || ''}`.trim() ||
-          s.student_fullName ||
-          'Unknown',
+        studentName: s.student_fullName || 'Unknown',
         submittedAt: s.createdAt,
         assignmentId: s.assignmentId,
       })),
@@ -249,10 +242,7 @@ export class FacultyService {
         type: 'exam',
         title: examMap[a.examId]?.title,
         courseName: courseMap[examMap[a.examId]?.courseId],
-        studentName:
-          `${a.student_firstName || ''} ${a.student_lastName || ''}`.trim() ||
-          a.student_fullName ||
-          'Unknown',
+        studentName: a.student_fullName || 'Unknown',
         submittedAt: a.createdAt,
         examId: a.examId,
       })),
