@@ -45,7 +45,7 @@ export class AppController {
 
   @Post('upload')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
   @UseInterceptors(
     FileInterceptor('file', {
       storage,
