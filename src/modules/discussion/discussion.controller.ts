@@ -19,7 +19,7 @@ import { CreateThreadDto } from './dto/discussion.dto';
 export class DiscussionController {
   constructor(private readonly discussionService: DiscussionService) {}
 
-  // 1. Get all inbox conversations (Direct 1:1 + Batch Groups)
+  // 1. Get all inbox conversations (Direct 1:1 + Batch Groups + Subject Groups)
   @Get('inbox')
   async getInbox(@Request() req: any) {
     return this.discussionService.getInbox(
@@ -54,7 +54,23 @@ export class DiscussionController {
     );
   }
 
-  // 4. Open or ensure Batch Group Thread
+  // 4a. Open or ensure Course / Subject Group Thread
+  @Post('course-thread')
+  async openCourseThread(
+    @Request() req: any,
+    @Body('courseId') courseId: string,
+    @Body('batchId') batchId?: string,
+    @Body('title') title?: string,
+  ) {
+    return this.discussionService.getOrCreateCourseThread(
+      req.user.organizationId,
+      courseId,
+      batchId,
+      title,
+    );
+  }
+
+  // 4b. Open or ensure Batch Group Thread
   @Post('batch-thread')
   async openBatchThread(
     @Request() req: any,
@@ -65,6 +81,18 @@ export class DiscussionController {
       req.user.organizationId,
       batchId,
       title,
+    );
+  }
+
+  // 4c. Get members of a group thread
+  @Get('threads/:threadId/members')
+  async getThreadMembers(
+    @Request() req: any,
+    @Param('threadId') threadId: string,
+  ) {
+    return this.discussionService.getThreadMembers(
+      req.user.organizationId,
+      threadId,
     );
   }
 
@@ -193,16 +221,4 @@ export class DiscussionController {
       replyId,
     );
   }
-  // 7. Get members of a group thread
-  @Get('threads/:threadId/members')
-  async getThreadMembers(
-    @Request() req: any,
-    @Param('threadId') threadId: string,
-  ) {
-    return this.discussionService.getThreadMembers(
-      req.user.organizationId,
-      threadId,
-    );
-  }
-
 }

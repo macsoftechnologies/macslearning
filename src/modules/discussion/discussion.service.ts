@@ -25,9 +25,9 @@ export class DiscussionService {
     private notificationsService: NotificationsService,
   ) {}
 
-  // List all conversations for the active user (Batch Groups + 1:1 Direct Messages)
+  // List all conversations for active user (Subject Groups + Batch Groups + 1:1 Direct Messages)
   async getInbox(organizationId: string, userId: string, userType: string) {
-    // 1. Get Direct Messages involving this user
+    // 1. Direct Messages involving this user
     const directThreads = await this.threadRepository
       .createQueryBuilder('thread')
       .where('thread.organizationId = :organizationId', { organizationId })
@@ -37,19 +37,37 @@ export class DiscussionService {
       .orderBy('thread.updatedAt', 'DESC')
       .getMany();
 
-    // 2. Get Batch Groups user belongs to
+    // 2. Batch Groups
     let batchIds: string[] = [];
+    let enrolledCourseIds: string[] = [];
+
     if (userType === 'STUDENT') {
       const enrollments = await this.enrollmentRepository.find({
         where: { organizationId, studentId: userId, status: 'ACTIVE' },
       });
       batchIds = Array.from(new Set(enrollments.map(e => e.batchId).filter(Boolean)));
-    } else {
-      // Admin / Faculty see all batches of the organization
+      enrolledCourseIds = Array.from(new Set(enrollments.map(e => e.courseId).filter(Boolean)));
+    } else if (userType === 'FACULTY') {
       const allBatches = await this.batchRepository.find({ where: { organizationId } });
       batchIds = allBatches.map(b => b.id);
+      
+      const allCourses = await this.courseRepository.find({ where: { organizationId, isDeleted: false } });
+      enrolledCourseIds = allCourses
+        .filter(c => Array.isArray(c.instructorIds) && c.instructorIds.includes(userId))
+        .map(c => c.id);
+      if (enrolledCourseIds.length === 0) {
+        enrolledCourseIds = allCourses.map(c => c.id);
+      }
+    } else {
+      // Org Admin / Super Admin sees all batches and courses
+      const allBatches = await this.batchRepository.find({ where: { organizationId } });
+      batchIds = allBatches.map(b => b.id);
+
+      const allCourses = await this.courseRepository.find({ where: { organizationId, isDeleted: false } });
+      enrolledCourseIds = allCourses.map(c => c.id);
     }
 
+    // Auto-create & load Batch Threads
     let batchThreads: Thread[] = [];
     if (batchIds.length > 0) {
       batchThreads = await this.threadRepository
@@ -83,12 +101,47 @@ export class DiscussionService {
             batchThreads.push(newGroup);
           }
         }
-      } catch (err) {
-        // Safe fallback - don't crash getInbox if auto-creation encounters constraint
-      }
+      } catch (err) {}
     }
 
-    // Collect all partner user IDs
+    // Auto-create & load Course / Subject Groups
+    let courseThreads: Thread[] = [];
+    if (enrolledCourseIds.length > 0) {
+      courseThreads = await this.threadRepository
+        .createQueryBuilder('thread')
+        .where('thread.organizationId = :organizationId', { organizationId })
+        .andWhere('thread.threadType = :type', { type: 'COURSE_GROUP' })
+        .andWhere('thread.courseId IN (:...enrolledCourseIds)', { enrolledCourseIds })
+        .andWhere('thread.isDeleted = false')
+        .orderBy('thread.updatedAt', 'DESC')
+        .getMany();
+
+      try {
+        const existingCourseIdSet = new Set(courseThreads.map(t => t.courseId));
+        const missingCourseIds = enrolledCourseIds.filter(id => !existingCourseIdSet.has(id));
+        if (missingCourseIds.length > 0) {
+          const coursesToCreate = await this.courseRepository.find({
+            where: { id: In(missingCourseIds) }
+          });
+
+          for (const c of coursesToCreate) {
+            const newGroup = await this.threadRepository.save(this.threadRepository.create({
+              organizationId,
+              threadType: 'COURSE_GROUP',
+              courseId: c.id,
+              authorId: userId || 'SYSTEM',
+              title: `${c.title} Subject Discussion`,
+              content: `Official discussion channel for ${c.title}`,
+              lastMessage: `Welcome to ${c.title} subject discussion group!`,
+              lastMessageAt: new Date(),
+            }));
+            courseThreads.push(newGroup);
+          }
+        }
+      } catch (err) {}
+    }
+
+    // Map Partner User metadata
     const partnerUserIds = new Set<string>();
     for (const t of directThreads) {
       const partnerId = t.authorId === userId ? t.recipientId : t.authorId;
@@ -110,6 +163,11 @@ export class DiscussionService {
       ? await this.batchRepository.find({ where: { id: In(batchIds) } }) 
       : [];
     const batchMap = new Map(batches.map(b => [b.id, b.name || 'Cohort Group']));
+
+    const courses = enrolledCourseIds.length > 0
+      ? await this.courseRepository.find({ where: { id: In(enrolledCourseIds) } })
+      : [];
+    const courseMap = new Map(courses.map(c => [c.id, c.title || 'Course Subject']));
 
     const formattedDirect = directThreads.map(t => {
       const partnerId = t.authorId === userId ? t.recipientId : t.authorId;
@@ -135,15 +193,26 @@ export class DiscussionService {
       replyCount: t.replyCount || 0,
     }));
 
+    const formattedCourse = courseThreads.map(t => ({
+      id: t.id,
+      threadType: 'COURSE_GROUP',
+      courseId: t.courseId,
+      batchId: t.batchId,
+      title: t.title || `${courseMap.get(t.courseId) || 'Subject'} Discussion`,
+      lastMessage: t.lastMessage || t.content || '',
+      lastMessageAt: t.lastMessageAt || t.updatedAt,
+      replyCount: t.replyCount || 0,
+    }));
+
     return {
       directChats: formattedDirect,
       batchGroups: formattedBatch,
+      courseGroups: formattedCourse,
     };
   }
 
   // Get available contacts to start 1:1 chat with (Admins, Faculty, Classmates)
   async getContacts(organizationId: string, userId: string, userType: string) {
-    // 1. Always get Org Admins & Faculty
     const staff = await this.userRepository.find({
       where: [
         { organizationId, userType: 'ORG_USER', status: 'ACTIVE', isDeleted: false },
@@ -151,7 +220,6 @@ export class DiscussionService {
       ],
     });
 
-    // 2. Get Classmates (Students in same batch)
     let classmates: any[] = [];
     if (userType === 'STUDENT') {
       const myEnrollments = await this.enrollmentRepository.find({
@@ -170,7 +238,6 @@ export class DiscussionService {
         }
       }
     } else {
-      // Admin / Faculty see all active students
       classmates = await this.userRepository.find({
         where: { organizationId, userType: 'STUDENT', status: 'ACTIVE', isDeleted: false },
         take: 100,
@@ -250,7 +317,36 @@ export class DiscussionService {
     return thread;
   }
 
-  // Get messages for any thread (1:1, Batch Group, or Course Forum)
+  // Ensure or get Course Group Thread
+  async getOrCreateCourseThread(organizationId: string, courseId: string, batchId?: string, title?: string) {
+    const where: any = { organizationId, threadType: 'COURSE_GROUP', courseId, isDeleted: false };
+    if (batchId) where.batchId = batchId;
+
+    let thread = await this.threadRepository.findOne({ where });
+
+    if (!thread) {
+      const course = await this.courseRepository.findOne({ where: { id: courseId, organizationId } });
+      const defaultTitle = title || (course ? `${course.title} Subject Discussion` : 'Subject Discussion');
+
+      thread = this.threadRepository.create({
+        organizationId,
+        threadType: 'COURSE_GROUP',
+        courseId,
+        batchId: batchId || undefined,
+        authorId: 'SYSTEM',
+        title: defaultTitle,
+        content: `Welcome to ${defaultTitle}!`,
+        lastMessage: `Welcome to ${defaultTitle}!`,
+        lastMessageAt: new Date(),
+        replyCount: 0,
+      });
+      await this.threadRepository.save(thread);
+    }
+
+    return thread;
+  }
+
+  // Get messages for any thread (1:1, Batch Group, or Course Group)
   async getThreadMessages(organizationId: string, threadId: string) {
     const thread = await this.threadRepository.findOne({ where: { id: threadId, organizationId, isDeleted: false } });
     if (!thread) throw new NotFoundException('Thread not found');
@@ -332,7 +428,6 @@ export class DiscussionService {
     } catch (e) {}
 
     const sender = await this.userRepository.findOne({ where: { id: authorId, organizationId } });
-
     return {
       id: savedReply.id,
       content: savedReply.content,
@@ -348,7 +443,66 @@ export class DiscussionService {
     };
   }
 
-  // Existing Course Forum methods
+  // Get all members of a group thread (Faculty, Admins & Enrolled Batch / Subject Students)
+  async getThreadMembers(organizationId: string, threadId: string) {
+    const thread = await this.threadRepository.findOne({ where: { id: threadId, organizationId, isDeleted: false } });
+    if (!thread) throw new NotFoundException('Thread not found');
+
+    const staff = await this.userRepository.find({
+      where: [
+        { organizationId, userType: 'ORG_USER', status: 'ACTIVE', isDeleted: false },
+        { organizationId, userType: 'FACULTY', status: 'ACTIVE', isDeleted: false },
+      ],
+    });
+
+    let students: any[] = [];
+    if (thread.courseId) {
+      const enrollWhere: any = { organizationId, courseId: thread.courseId, status: 'ACTIVE' };
+      if (thread.batchId) enrollWhere.batchId = thread.batchId;
+
+      const enrollments = await this.enrollmentRepository.find({ where: enrollWhere });
+      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
+      if (studentIds.length > 0) {
+        students = await this.userRepository.find({
+          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
+        });
+      }
+    } else if (thread.batchId) {
+      const enrollments = await this.enrollmentRepository.find({
+        where: { organizationId, batchId: thread.batchId, status: 'ACTIVE' },
+      });
+      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
+      if (studentIds.length > 0) {
+        students = await this.userRepository.find({
+          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
+        });
+      }
+    } else {
+      students = await this.userRepository.find({
+        where: { organizationId, userType: 'STUDENT', status: 'ACTIVE', isDeleted: false },
+        take: 100,
+      });
+    }
+
+    const formatUser = (u: any) => ({
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      userType: u.userType,
+      photo: (u.customProfile as any)?.documents?.photo?.url || (u.customProfile as any)?.documents?.photo || null,
+    });
+
+    return {
+      batchId: thread.batchId,
+      courseId: thread.courseId,
+      threadTitle: thread.title,
+      totalCount: staff.length + students.length,
+      staff: staff.map(formatUser),
+      students: students.map(formatUser),
+    };
+  }
+
+  // Legacy Course Forum methods
   async createThread(organizationId: string, courseId: string, authorId: string, threadData: any) {
     const thread = this.threadRepository.create({
       ...threadData,
@@ -428,51 +582,4 @@ export class DiscussionService {
     }
     return reply;
   }
-  // Get all members of a group thread (Faculty, Admins & Enrolled Batch Students)
-  async getThreadMembers(organizationId: string, threadId: string) {
-    const thread = await this.threadRepository.findOne({ where: { id: threadId, organizationId, isDeleted: false } });
-    if (!thread) throw new NotFoundException('Thread not found');
-
-    const staff = await this.userRepository.find({
-      where: [
-        { organizationId, userType: 'ORG_USER', status: 'ACTIVE', isDeleted: false },
-        { organizationId, userType: 'FACULTY', status: 'ACTIVE', isDeleted: false },
-      ],
-    });
-
-    let students: any[] = [];
-    if (thread.batchId) {
-      const enrollments = await this.enrollmentRepository.find({
-        where: { organizationId, batchId: thread.batchId, status: 'ACTIVE' },
-      });
-      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
-      if (studentIds.length > 0) {
-        students = await this.userRepository.find({
-          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
-        });
-      }
-    } else {
-      students = await this.userRepository.find({
-        where: { organizationId, userType: 'STUDENT', status: 'ACTIVE', isDeleted: false },
-        take: 100,
-      });
-    }
-
-    const formatUser = (u: any) => ({
-      id: u.id,
-      fullName: u.fullName,
-      email: u.email,
-      userType: u.userType,
-      photo: (u.customProfile as any)?.documents?.photo?.url || (u.customProfile as any)?.documents?.photo || null,
-    });
-
-    return {
-      batchId: thread.batchId,
-      threadTitle: thread.title,
-      totalCount: staff.length + students.length,
-      staff: staff.map(formatUser),
-      students: students.map(formatUser),
-    };
-  }
-
 }
