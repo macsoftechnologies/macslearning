@@ -507,6 +507,9 @@ export class StudentsService {
           ...sp,
           ...((student as any).customProfile || {}),
         };
+        if (!student.registrationId && ((sp as any).registrationId || (student.customProfile as any).registrationId)) {
+          student.registrationId = (sp as any).registrationId || (student.customProfile as any).registrationId;
+        }
       }
     } catch (e) {}
 

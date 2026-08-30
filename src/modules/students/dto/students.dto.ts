@@ -3,6 +3,10 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class UpdateStudentDto {
   @IsString()
   @IsOptional()
+  registrationId?: string;
+
+  @IsString()
+  @IsOptional()
   fullName?: string;
 
   @IsString()
