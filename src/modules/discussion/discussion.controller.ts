@@ -85,6 +85,21 @@ export class DiscussionController {
   }
 
   // 4c. Get members of a group thread
+  
+  // 4d. Preview members before group creation
+  @Get('preview-members')
+  async previewMembers(
+    @Request() req: any,
+    @Query('courseId') courseId?: string,
+    @Query('batchId') batchId?: string,
+  ) {
+    return this.discussionService.previewMembers(
+      req.user.organizationId,
+      courseId,
+      batchId,
+    );
+  }
+
   @Get('threads/:threadId/members')
   async getThreadMembers(
     @Request() req: any,
