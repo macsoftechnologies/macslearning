@@ -498,6 +498,18 @@ export class StudentsService {
       (student as any).customProfile = {};
     }
 
+    // Load and merge structured profile from student_profiles table
+    try {
+      const sp = await this.studentProfileRepository.findOne({ where: { userId: studentId } });
+      if (sp) {
+        (student as any).studentProfile = sp;
+        (student as any).customProfile = {
+          ...sp,
+          ...((student as any).customProfile || {}),
+        };
+      }
+    } catch (e) {}
+
     // Map region name if exists
     if ((student as any).regionId) {
       try {
