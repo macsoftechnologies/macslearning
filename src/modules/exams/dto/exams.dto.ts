@@ -101,6 +101,14 @@ export class SaveAnswerDto {
   @IsString()
   @IsOptional()
   textAnswer?: string;
+
+  @IsString()
+  @IsOptional()
+  fileUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  fileName?: string;
 }
 
 export class AnswerItemDto {
@@ -115,6 +123,14 @@ export class AnswerItemDto {
   @IsString()
   @IsOptional()
   textAnswer?: string;
+
+  @IsString()
+  @IsOptional()
+  fileUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  fileName?: string;
 }
 
 export class SubmitAttemptDto {
