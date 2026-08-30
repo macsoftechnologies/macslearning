@@ -228,7 +228,8 @@ export class TranscriptsService {
         // Top Metadata: Student Name and Reg. Number
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
         doc.text(`Student Name : ${student.fullName || 'Student'}`, startX + 2, startY);
-        doc.text(`Reg. Number   : ${student.registrationId || '—'}`, startX + 340, startY);
+        const regDisplay = student.registrationId || (student.customProfile as any)?.registrationId || (student.customProfile as any)?.registrationNumber || '—';
+        doc.text(`Reg. Number   : ${regDisplay}`, startX + 340, startY);
 
         startY += 20;
 

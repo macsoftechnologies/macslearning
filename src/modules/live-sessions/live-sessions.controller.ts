@@ -10,7 +10,7 @@ export class LiveSessionsController {
   constructor(private readonly liveSessionsService: LiveSessionsService) {}
 
   @Get()
-  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY', 'STUDENT')
   async findAll(
     @Request() req: any,
     @Query('batchId') batchId?: string,

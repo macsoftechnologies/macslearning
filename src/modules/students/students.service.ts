@@ -202,7 +202,7 @@ export class StudentsService {
       student.registrationId = updateData.registrationId ? updateData.registrationId.trim() : null;
     }
 
-    const userUpdateFields = ['fullName', 'mobile', 'regionId', 'ataStatus'];
+    const userUpdateFields = ['fullName', 'mobile', 'regionId', 'ataStatus', 'registrationId'];
     const userPayload: any = {};
     const incomingCustomProfile: any = {};
 
