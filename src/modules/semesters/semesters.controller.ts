@@ -79,6 +79,20 @@ export class SemestersController {
     return { ...data, status: data.isActive ? 'ACTIVE' : 'INACTIVE' };
   }
 
+  @Post(':id/progress-students')
+  @Roles('ORG_USER')
+  async progressStudents(
+    @Request() req: any,
+    @Param('id') semesterId: string,
+    @Body('batchId') batchId?: string,
+  ) {
+    return this.semestersService.progressCohortToNextSemester(
+      req.user.organizationId,
+      semesterId,
+      batchId,
+    );
+  }
+
   @Delete(':id')
   @Roles('SUPER_ADMIN', 'ORG_USER')
   async remove(@Request() req: any, @Param('id') id: string) {

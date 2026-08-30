@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { Semester } from './entities/semester.entity';
 import { ProgramCourseMapping } from '../programs/entities/program-course-mapping.entity';
 import { Course } from '../courses/entities/course.entity';
+import { User } from '../users/entities/user.entity';
+import { Enrollment } from '../enrollment/entities/enrollment.entity';
 
 @Injectable()
 export class SemestersService {
@@ -19,6 +21,15 @@ export class SemestersService {
   async findAll(organizationId: string): Promise<any[]> {
     const semesters = await this.semestersRepository.find({ where: { organizationId }, order: { createdAt: 'DESC' } });
     const mappings = await this.mappingRepository.find({ where: { organizationId } });
+
+    const now = new Date();
+    // Lazy evaluation: auto-close semesters whose end date has passed
+    for (const s of semesters) {
+      if (s.endDate && new Date(s.endDate) < now && s.isActive) {
+        s.isActive = false;
+        await this.semestersRepository.update({ id: s.id }, { isActive: false }).catch(() => {});
+      }
+    }
 
     return semesters.map(s => {
       const courseIds = mappings
@@ -73,7 +84,7 @@ export class SemestersService {
       semester.isActive = updateData.status === 'ACTIVE';
     }
     if (updateData.name) {
-        updateData.term = updateData.name;
+      updateData.term = updateData.name;
     }
     const updated = this.semestersRepository.merge(semester, updateData);
     return this.semestersRepository.save(updated);
@@ -133,5 +144,76 @@ export class SemestersService {
     }
 
     return { success: true };
+  }
+
+  async progressCohortToNextSemester(organizationId: string, currentSemesterId: string, batchId?: string) {
+    const currentSem = await this.semestersRepository.findOne({ where: { id: currentSemesterId, organizationId } });
+    if (!currentSem) throw new NotFoundException('Current semester not found');
+
+    const programId = currentSem.programId;
+    if (!programId) throw new NotFoundException('Semester has no associated program');
+
+    // Find all semesters for this program in chronological order
+    const allProgramSemesters = await this.semestersRepository.find({
+      where: { organizationId, programId },
+      order: { createdAt: 'ASC' }
+    });
+
+    const currentIndex = allProgramSemesters.findIndex(s => s.id === currentSemesterId);
+    if (currentIndex === -1 || currentIndex >= allProgramSemesters.length - 1) {
+      return { message: 'This is the final semester in the program curriculum. No further semester to progress to.', progressedCount: 0 };
+    }
+
+    const nextSem = allProgramSemesters[currentIndex + 1];
+
+    // Find courses mapped to the next semester
+    const nextMappings = await this.mappingRepository.find({
+      where: { organizationId, programId, semesterId: nextSem.id }
+    });
+    const nextCourseIds = nextMappings.map(m => m.courseId).filter(Boolean);
+
+    // Find all students currently in this semester / batch
+    const userRepo = this.semestersRepository.manager.getRepository(User);
+    const enrollmentRepo = this.semestersRepository.manager.getRepository(Enrollment);
+
+    const studentWhere: any = { organizationId, programId, userType: 'STUDENT', isDeleted: false };
+    if (batchId) studentWhere.batchId = batchId;
+
+    const students = await userRepo.find({ where: studentWhere });
+    let progressedCount = 0;
+
+    for (const student of students) {
+      // Advance student's semester ID
+      await userRepo.update({ id: student.id }, { semesterId: nextSem.id });
+
+      // Automatically enroll student in the next semester's mapped courses
+      for (const courseId of nextCourseIds) {
+        const existing = await enrollmentRepo.findOne({
+          where: { studentId: student.id, courseId, organizationId }
+        });
+
+        if (!existing) {
+          const newEnrollment = enrollmentRepo.create({
+            studentId: student.id,
+            courseId,
+            programId,
+            semesterId: nextSem.id,
+            batchId: student.batchId || batchId,
+            organizationId,
+            status: 'ACTIVE',
+            paymentStatus: 'PAID',
+            source: 'SEMESTER_PROGRESSION',
+          });
+          await enrollmentRepo.save(newEnrollment);
+        }
+      }
+      progressedCount++;
+    }
+
+    return {
+      message: `Successfully progressed ${progressedCount} student(s) to ${nextSem.name || nextSem.term || 'Next Semester'}`,
+      progressedCount,
+      nextSemester: nextSem
+    };
   }
 }
