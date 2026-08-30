@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { ExamsService } from './exams.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
@@ -323,6 +324,12 @@ export class ExamsController {
       req.user.userId,
       examId,
     );
+  }
+
+  @Get('all-submissions')
+  @Roles('SUPER_ADMIN', 'ORG_USER', 'FACULTY')
+  async getAllSubmissions(@Request() req: any, @Query() query: any) {
+    return this.examsService.getAllSubmissions(req.user.organizationId, query);
   }
 
   @Get('exams/:examId/results')

@@ -13,6 +13,7 @@ import { Attempt } from './entities/attempt.entity';
 import { AssessmentResult } from '../results/entities/assessmentResult.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CoursesService } from '../courses/courses.service';
+import { Course } from '../courses/entities/course.entity';
 import { User } from '../users/entities/user.entity';
 import { Enrollment } from '../enrollment/entities/enrollment.entity';
 
@@ -26,6 +27,8 @@ export class ExamsService {
     @InjectRepository(AssessmentResult)
     private resultRepository: Repository<AssessmentResult>,
     @InjectRepository(Enrollment) private enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(User) private userRepository: Repository<User>,
+    @InjectRepository(Course) private courseRepository: Repository<Course>,
     @InjectQueue('exams') private examsQueue: Queue,
     private notificationsService: NotificationsService,
     private coursesService: CoursesService,
@@ -773,6 +776,111 @@ export class ExamsService {
     } catch (e) {}
 
     return { message: 'Answer graded', marksObtained, percentage, isPassed };
+  }
+
+  
+  async getAllSubmissions(organizationId: string, query: any = {}) {
+    const attempts = await this.attemptRepository.find({
+      where: { organizationId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const finishedAttempts = attempts.filter(a => a.status !== 'IN_PROGRESS' || (a.answers && (Array.isArray(a.answers) ? a.answers.length : true)));
+    if (!finishedAttempts.length) return [];
+
+    const examIds = [...new Set(finishedAttempts.map(a => a.examId).filter(Boolean))];
+    const studentIds = [...new Set(finishedAttempts.map(a => a.studentId).filter(Boolean))];
+
+    const [exams, students, rawEnrollments, questions] = await Promise.all([
+      examIds.length ? this.examRepository.find({ where: { id: In(examIds), organizationId } }) : [],
+      studentIds.length ? this.userRepository.find({ where: { id: In(studentIds), organizationId } }) : [],
+      studentIds.length ? this.enrollmentRepository.find({ where: { studentId: In(studentIds), organizationId }, relations: { batch: true } }) : [],
+      examIds.length ? this.questionRepository.find({ where: { examId: In(examIds), organizationId, isDeleted: false } }) : [],
+    ]);
+
+    const examMap = new Map<string, Exam>();
+    exams.forEach(e => examMap.set(String(e.id), e));
+
+    const studentMap = new Map<string, User>();
+    students.forEach(s => studentMap.set(String(s.id), s));
+
+    const enrollmentMap = new Map<string, any>();
+    (rawEnrollments as any[]).forEach((e: any) => {
+      enrollmentMap.set(`${e.studentId}_${e.courseId}`, e);
+      if (!enrollmentMap.has(String(e.studentId))) {
+        enrollmentMap.set(String(e.studentId), e);
+      }
+    });
+
+    const questionMap = new Map<string, Question>();
+    questions.forEach(q => questionMap.set(String(q.id), q));
+
+    const courseIds = [...new Set(exams.map(e => e.courseId).filter(Boolean))];
+    const courses = courseIds.length ? await this.courseRepository.find({ where: { id: In(courseIds) } }) : [];
+    const courseMap = new Map<string, Course>();
+    courses.forEach(c => courseMap.set(String(c.id), c));
+
+    return finishedAttempts.map(attempt => {
+      const exam = examMap.get(String(attempt.examId));
+      const student = studentMap.get(String(attempt.studentId));
+      const course = exam ? courseMap.get(String(exam.courseId)) : null;
+      const enrollment = enrollmentMap.get(`${attempt.studentId}_${exam?.courseId}`) || enrollmentMap.get(String(attempt.studentId));
+
+      let answers = attempt.answers || [];
+      if (typeof answers === 'string') {
+        try { answers = JSON.parse(answers); } catch(e) { answers = []; }
+      }
+
+      let hasBookReviewOrPaper = false;
+      let hasPendingGrading = false;
+      let questionTypesSet = new Set<string>();
+
+      (Array.isArray(answers) ? answers : []).forEach((ans: any) => {
+        const q = questionMap.get(String(ans.questionId));
+        if (q) {
+          questionTypesSet.add(q.type);
+          if (q.type === 'BOOK_REVIEW' || q.type === 'RESEARCH_PAPER' || q.type === 'SHORT_ANSWER') {
+            hasBookReviewOrPaper = true;
+            if (ans.isGraded === false || ans.isGraded === undefined || ans.marks === undefined || ans.marks === null) {
+              hasPendingGrading = true;
+            }
+          }
+        }
+      });
+
+      return {
+        attemptId: attempt.id,
+        attemptNumber: attempt.attemptNumber || 1,
+        status: attempt.status,
+        submittedAt: attempt.submittedAt || attempt.createdAt,
+        marksObtained: attempt.marksObtained || 0,
+        percentage: attempt.percentage || 0,
+        isPassed: attempt.isPassed || false,
+        hasBookReviewOrPaper,
+        needsGrading: hasPendingGrading,
+        questionTypes: Array.from(questionTypesSet),
+        exam: {
+          id: exam?.id || attempt.examId,
+          title: exam?.title || 'Exam',
+          isFinalExam: !!exam?.isFinalExam,
+          totalMarks: exam?.totalMarks || 100,
+          passingPercentage: exam?.passingPercentage || 70,
+        },
+        course: {
+          id: exam?.courseId || course?.id,
+          title: course?.title || 'Course Subject',
+        },
+        student: {
+          id: student?.id || attempt.studentId,
+          fullName: student?.fullName || 'Student',
+          email: student?.email || '',
+        },
+        batch: enrollment?.batch ? {
+          id: enrollment.batch.id,
+          name: enrollment.batch.name,
+        } : null,
+      };
+    });
   }
 
   async publishResult(
