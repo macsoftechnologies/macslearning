@@ -43,7 +43,10 @@ export class DiscussionService {
 
     if (userType === 'STUDENT') {
       const enrollments = await this.enrollmentRepository.find({
-        where: { organizationId, studentId: userId, status: 'ACTIVE' },
+        where: [
+          { organizationId, studentId: userId, status: 'ACTIVE' },
+          { organizationId, studentId: userId },
+        ],
       });
       batchIds = Array.from(new Set(enrollments.map(e => e.batchId).filter(Boolean)));
       enrolledCourseIds = Array.from(new Set(enrollments.map(e => e.courseId).filter(Boolean)));
@@ -75,49 +78,34 @@ export class DiscussionService {
         .andWhere('thread.isDeleted = false')
         .orderBy('thread.updatedAt', 'DESC')
         .getMany();
-
-      try {
-        const existingBatchIdSet = new Set(batchThreads.map(t => t.batchId));
-        const missingBatchIds = batchIds.filter(id => !existingBatchIdSet.has(id));
-        if (missingBatchIds.length > 0) {
-          const batchesToCreate = await this.batchRepository.find({
-            where: { id: In(missingBatchIds) }
-          });
-
-          for (const b of batchesToCreate) {
-            const newGroup = await this.threadRepository.save(this.threadRepository.create({
-              organizationId,
-              threadType: 'BATCH_GROUP',
-              batchId: b.id,
-              authorId: userId || 'SYSTEM',
-              title: `${b.name} Cohort Discussion`,
-              content: `Welcome to the official cohort group for ${b.name}!`,
-              lastMessage: 'Welcome to your cohort discussion group!',
-              lastMessageAt: new Date(),
-            }));
-            batchThreads.push(newGroup);
-          }
-        }
-      } catch (err) {}
     }
 
-    // Load Admin-Created Course / Subject Groups (filtered strictly by enrolled/assigned course and batch)
+    // Load Admin-Created Course / Subject Groups
     let courseThreads: Thread[] = [];
     if (userType === 'ORG_USER' || userType === 'SUPER_ADMIN') {
       courseThreads = await this.threadRepository.find({
         where: { organizationId, threadType: 'COURSE_GROUP', isDeleted: false },
         order: { updatedAt: 'DESC' },
       });
-    } else if (enrolledCourseIds.length > 0) {
+    } else {
       const qb = this.threadRepository
         .createQueryBuilder('thread')
         .where('thread.organizationId = :organizationId', { organizationId })
         .andWhere('thread.threadType = :type', { type: 'COURSE_GROUP' })
-        .andWhere('thread.courseId IN (:...enrolledCourseIds)', { enrolledCourseIds })
         .andWhere('thread.isDeleted = false');
 
-      if (userType === 'STUDENT' && batchIds.length > 0) {
-        qb.andWhere('(thread.batchId IS NULL OR thread.batchId IN (:...batchIds))', { batchIds });
+      if (userType === 'STUDENT') {
+        if (batchIds.length > 0 && enrolledCourseIds.length > 0) {
+          qb.andWhere('(thread.courseId IN (:...enrolledCourseIds) OR thread.batchId IN (:...batchIds))', { enrolledCourseIds, batchIds });
+        } else if (batchIds.length > 0) {
+          qb.andWhere('thread.batchId IN (:...batchIds)', { batchIds });
+        } else if (enrolledCourseIds.length > 0) {
+          qb.andWhere('thread.courseId IN (:...enrolledCourseIds)', { enrolledCourseIds });
+        }
+      } else if (userType === 'FACULTY') {
+        if (enrolledCourseIds.length > 0) {
+          qb.andWhere('thread.courseId IN (:...enrolledCourseIds)', { enrolledCourseIds });
+        }
       }
 
       courseThreads = await qb.orderBy('thread.updatedAt', 'DESC').getMany();
@@ -196,6 +184,70 @@ export class DiscussionService {
     };
   }
 
+  // Helper method to resolve enrolled students for course & batch
+  private async resolveEnrolledStudents(organizationId: string, courseId?: string, batchId?: string): Promise<User[]> {
+    let studentIds = new Set<string>();
+
+    if (courseId && batchId) {
+      // 1. Try exact course + batch match
+      const exactEnrollments = await this.enrollmentRepository.find({
+        where: [
+          { organizationId, courseId, batchId, status: 'ACTIVE' },
+          { organizationId, courseId, batchId },
+        ],
+      });
+      exactEnrollments.forEach(e => studentIds.add(e.studentId));
+
+      // 2. If empty, check batch-level enrollments (all students in this cohort batch)
+      if (studentIds.size === 0) {
+        const batchEnrollments = await this.enrollmentRepository.find({
+          where: [
+            { organizationId, batchId, status: 'ACTIVE' },
+            { organizationId, batchId },
+          ],
+        });
+        batchEnrollments.forEach(e => studentIds.add(e.studentId));
+      }
+
+      // 3. Check course-level enrollments
+      if (studentIds.size === 0) {
+        const courseEnrollments = await this.enrollmentRepository.find({
+          where: [
+            { organizationId, courseId, status: 'ACTIVE' },
+            { organizationId, courseId },
+          ],
+        });
+        courseEnrollments.forEach(e => studentIds.add(e.studentId));
+      }
+    } else if (courseId) {
+      const courseEnrollments = await this.enrollmentRepository.find({
+        where: [
+          { organizationId, courseId, status: 'ACTIVE' },
+          { organizationId, courseId },
+        ],
+      });
+      courseEnrollments.forEach(e => studentIds.add(e.studentId));
+    } else if (batchId) {
+      const batchEnrollments = await this.enrollmentRepository.find({
+        where: [
+          { organizationId, batchId, status: 'ACTIVE' },
+          { organizationId, batchId },
+        ],
+      });
+      batchEnrollments.forEach(e => studentIds.add(e.studentId));
+    }
+
+    if (studentIds.size === 0) return [];
+
+    return this.userRepository.find({
+      where: {
+        id: In(Array.from(studentIds)),
+        organizationId,
+        isDeleted: false,
+      },
+    });
+  }
+
   // Get available contacts to start 1:1 chat with (Admins, Faculty, Classmates)
   async getContacts(organizationId: string, userId: string, userType: string) {
     const staff = await this.userRepository.find({
@@ -208,17 +260,23 @@ export class DiscussionService {
     let classmates: any[] = [];
     if (userType === 'STUDENT') {
       const myEnrollments = await this.enrollmentRepository.find({
-        where: { organizationId, studentId: userId, status: 'ACTIVE' },
+        where: [
+          { organizationId, studentId: userId, status: 'ACTIVE' },
+          { organizationId, studentId: userId },
+        ],
       });
       const myBatchIds = Array.from(new Set(myEnrollments.map(e => e.batchId).filter(Boolean)));
       if (myBatchIds.length > 0) {
         const peerEnrollments = await this.enrollmentRepository.find({
-          where: { organizationId, batchId: In(myBatchIds), status: 'ACTIVE' },
+          where: [
+            { organizationId, batchId: In(myBatchIds), status: 'ACTIVE' },
+            { organizationId, batchId: In(myBatchIds) },
+          ],
         });
         const peerStudentIds = Array.from(new Set(peerEnrollments.map(e => e.studentId).filter(id => id !== userId)));
         if (peerStudentIds.length > 0) {
           classmates = await this.userRepository.find({
-            where: { id: In(peerStudentIds), organizationId, status: 'ACTIVE', isDeleted: false },
+            where: { id: In(peerStudentIds), organizationId, isDeleted: false },
           });
         }
       }
@@ -436,7 +494,6 @@ export class DiscussionService {
     if (!thread) throw new NotFoundException('Thread not found');
 
     let staff: any[] = [];
-    let students: any[] = [];
 
     // 1. Staff Members: Org Admins + Only Assigned Faculty for this Course
     const admins = await this.userRepository.find({
@@ -455,7 +512,6 @@ export class DiscussionService {
         });
       }
     } else {
-      // General batch group: include faculty in the org
       assignedFaculty = await this.userRepository.find({
         where: { organizationId, userType: 'FACULTY', status: 'ACTIVE', isDeleted: false },
       });
@@ -463,29 +519,8 @@ export class DiscussionService {
 
     staff = [...admins, ...assignedFaculty];
 
-    // 2. Enrolled Students: strictly scoped to course & batch
-    if (thread.courseId) {
-      const enrollWhere: any = { organizationId, courseId: thread.courseId, status: 'ACTIVE' };
-      if (thread.batchId) enrollWhere.batchId = thread.batchId;
-
-      const enrollments = await this.enrollmentRepository.find({ where: enrollWhere });
-      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
-      if (studentIds.length > 0) {
-        students = await this.userRepository.find({
-          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
-        });
-      }
-    } else if (thread.batchId) {
-      const enrollments = await this.enrollmentRepository.find({
-        where: { organizationId, batchId: thread.batchId, status: 'ACTIVE' },
-      });
-      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
-      if (studentIds.length > 0) {
-        students = await this.userRepository.find({
-          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
-        });
-      }
-    }
+    // 2. Enrolled Students: resolve through helper
+    const students = await this.resolveEnrolledStudents(organizationId, thread.courseId, thread.batchId);
 
     const formatUser = (u: any) => ({
       id: u.id,
@@ -505,11 +540,9 @@ export class DiscussionService {
     };
   }
 
-
   // Preview members for a batch and course before creating group
   async previewMembers(organizationId: string, courseId?: string, batchId?: string) {
     let staff: any[] = [];
-    let students: any[] = [];
 
     const admins = await this.userRepository.find({
       where: [
@@ -534,28 +567,8 @@ export class DiscussionService {
 
     staff = [...admins, ...assignedFaculty];
 
-    if (courseId) {
-      const enrollWhere: any = { organizationId, courseId, status: 'ACTIVE' };
-      if (batchId) enrollWhere.batchId = batchId;
-
-      const enrollments = await this.enrollmentRepository.find({ where: enrollWhere });
-      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
-      if (studentIds.length > 0) {
-        students = await this.userRepository.find({
-          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
-        });
-      }
-    } else if (batchId) {
-      const enrollments = await this.enrollmentRepository.find({
-        where: { organizationId, batchId, status: 'ACTIVE' },
-      });
-      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
-      if (studentIds.length > 0) {
-        students = await this.userRepository.find({
-          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
-        });
-      }
-    }
+    // Enrolled Students
+    const students = await this.resolveEnrolledStudents(organizationId, courseId, batchId);
 
     const formatUser = (u: any) => ({
       id: u.id,
