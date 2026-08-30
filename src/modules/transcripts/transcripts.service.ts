@@ -40,6 +40,20 @@ function getPoints(gradeLetter: string, score: number): string {
   return '0.0';
 }
 
+const SEMESTER_NAMES = [
+  'First Semester',
+  'Second Semester',
+  'Third Semester',
+  'Fourth Semester',
+  'Fifth Semester',
+  'Sixth Semester',
+  'Seventh Semester',
+  'Eighth Semester',
+];
+
+// Standard subject chunking per semester (5, 4, 4, 4, 4, 4, 5 for 30 subjects)
+const SEMESTER_CHUNK_SIZES = [5, 4, 4, 4, 4, 4, 5];
+
 @Injectable()
 export class TranscriptsService {
   constructor(
@@ -66,20 +80,20 @@ export class TranscriptsService {
 
     const programId = student.programId || enrollments.find(e => e.programId)?.programId;
 
-    // 2. Fetch All Semesters
-    let semesters = await this.semesterRepository.find({
+    // 2. Fetch All Semesters for this Program / Organization
+    let dbSemesters = await this.semesterRepository.find({
       where: programId ? { organizationId, programId } : { organizationId },
       order: { createdAt: 'ASC' },
     });
 
-    if (semesters.length === 0) {
-      semesters = await this.semesterRepository.find({
+    if (dbSemesters.length === 0) {
+      dbSemesters = await this.semesterRepository.find({
         where: { organizationId },
         order: { createdAt: 'ASC' },
       });
     }
 
-    // 3. Fetch All Courses
+    // 3. Fetch All Curriculum Courses
     let allCourses = await this.courseRepository.find({
       where: programId ? { organizationId, programId, isDeleted: false } : { organizationId, isDeleted: false },
       order: { createdAt: 'ASC' },
@@ -105,88 +119,75 @@ export class TranscriptsService {
       }
     }
 
-    // 5. Structure by Semester
+    // 5. Structure courses evenly by Semesters (First Semester, Second Semester, etc.)
+    interface CourseRow {
+      title: string;
+      credits: number;
+      marks: string;
+      grade: string;
+      points: string;
+      isCompleted: boolean;
+    }
+
     interface SemesterGroup {
       name: string;
-      courses: {
-        title: string;
-        credits: number;
-        marks: string;
-        grade: string;
-        points: string;
-        isCompleted: boolean;
-      }[];
+      courses: CourseRow[];
     }
 
     const semesterGroups: SemesterGroup[] = [];
-    const usedCourseIds = new Set<string>();
 
-    for (const sem of semesters) {
-      const semLabel = sem.name || sem.term || 'Semester';
-      const matchedCourses = allCourses.filter(c => c.semesterId === sem.id);
+    // Check if courses already have explicit semesterId
+    const hasExplicitSemesters = allCourses.some(c => c.semesterId && dbSemesters.some(s => s.id === c.semesterId));
 
-      if (matchedCourses.length > 0) {
-        const mapped = matchedCourses.map(c => {
-          usedCourseIds.add(c.id);
-          const gr = gradeMap.get(c.id);
-          const isCompleted = !!gr && Number(gr.totalScore) > 0;
-          return {
-            title: c.title,
-            credits: Number(c.credits) || 3,
-            marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
-            grade: isCompleted ? String(gr.grade || '') : '',
-            points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
-            isCompleted,
-          };
-        });
-
-        semesterGroups.push({
-          name: semLabel,
-          courses: mapped,
-        });
+    if (hasExplicitSemesters) {
+      for (const sem of dbSemesters) {
+        const semLabel = sem.name || sem.term || 'Semester';
+        const matched = allCourses.filter(c => c.semesterId === sem.id);
+        if (matched.length > 0) {
+          semesterGroups.push({
+            name: semLabel,
+            courses: matched.map(c => {
+              const gr = gradeMap.get(c.id);
+              const isCompleted = !!gr && Number(gr.totalScore) > 0;
+              return {
+                title: c.title,
+                credits: Number(c.credits) || 3,
+                marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
+                grade: isCompleted ? String(gr.grade || '') : '',
+                points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
+                isCompleted,
+              };
+            }),
+          });
+        }
       }
-    }
+    } else {
+      // Divide curriculum courses cleanly across standard ATA Semesters (5, 4, 4, 4, 4, 4, 5)
+      let courseIndex = 0;
+      for (let s = 0; s < SEMESTER_NAMES.length && courseIndex < allCourses.length; s++) {
+        const semName = SEMESTER_NAMES[s];
+        const chunkSize = SEMESTER_CHUNK_SIZES[s] || 4;
+        const chunk = allCourses.slice(courseIndex, courseIndex + chunkSize);
+        courseIndex += chunkSize;
 
-    // Handle courses without a semester mapping
-    const unassignedCourses = allCourses.filter(c => !usedCourseIds.has(c.id));
-    if (unassignedCourses.length > 0) {
-      const mapped = unassignedCourses.map(c => {
-        const gr = gradeMap.get(c.id);
-        const isCompleted = !!gr && Number(gr.totalScore) > 0;
-        return {
-          title: c.title,
-          credits: Number(c.credits) || 3,
-          marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
-          grade: isCompleted ? String(gr.grade || '') : '',
-          points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
-          isCompleted,
-        };
-      });
-
-      semesterGroups.push({
-        name: semesterGroups.length === 0 ? 'First Semester' : 'Core Courses',
-        courses: mapped,
-      });
-    }
-
-    // Fallback: If no courses found from curriculum, use grade records directly
-    if (semesterGroups.length === 0 && allGrades.length > 0) {
-      const mapped = allGrades.map(gr => {
-        const c = allCourses.find(item => item.id === gr.courseId);
-        return {
-          title: c?.title || 'Academic Course',
-          credits: Number(c?.credits) || 3,
-          marks: String(Math.round(Number(gr.totalScore))),
-          grade: String(gr.grade || ''),
-          points: getPoints(gr.grade, Number(gr.totalScore)),
-          isCompleted: true,
-        };
-      });
-
-      semesterGroups.push({
-        name: 'First Semester',
-        courses: mapped,
-      });
+        if (chunk.length > 0) {
+          semesterGroups.push({
+            name: semName,
+            courses: chunk.map(c => {
+              const gr = gradeMap.get(c.id);
+              const isCompleted = !!gr && Number(gr.totalScore) > 0;
+              return {
+                title: c.title,
+                credits: Number(c.credits) || 3,
+                marks: isCompleted ? String(Math.round(Number(gr.totalScore))) : '',
+                grade: isCompleted ? String(gr.grade || '') : '',
+                points: isCompleted ? getPoints(gr.grade, Number(gr.totalScore)) : '',
+                isCompleted,
+              };
+            }),
+          });
+        }
+      }
     }
 
     // 6. Compute Totals
@@ -208,7 +209,7 @@ export class TranscriptsService {
 
     const avgMarks = completedCount > 0 ? (totalMarks / completedCount).toFixed(1) : '';
 
-    // 7. Render Exact Sample Transcript Table via PDFKit
+    // 7. Render Exact Sample Table via PDFKit
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({
@@ -221,9 +222,16 @@ export class TranscriptsService {
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-        // Define exact grid column widths: total 555 pt (fits A4 perfectly)
         const startX = 20;
         let startY = 24;
+
+        // Top Metadata: Student Name and Reg. Number
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
+        doc.text(`Student Name : ${student.fullName || 'Student'}`, startX + 2, startY);
+        doc.text(`Reg. Number   : ${student.registrationId || '—'}`, startX + 340, startY);
+
+        startY += 20;
+
         const colW = {
           semester: 115,
           course: 220,
@@ -240,7 +248,6 @@ export class TranscriptsService {
           doc.lineWidth(0.75);
           doc.rect(startX, y, totalW, headerH).stroke('#000000');
 
-          // Divider lines
           let curX = startX;
           [colW.semester, colW.course, colW.credits, colW.marks, colW.grade].forEach(w => {
             curX += w;
@@ -259,7 +266,6 @@ export class TranscriptsService {
         };
 
         startY = drawTableHeader(startY);
-
         const rowHeight = 17;
 
         for (const semGroup of semesterGroups) {
@@ -302,19 +308,10 @@ export class TranscriptsService {
 
             // Text Content
             doc.font('Helvetica').fontSize(8).fillColor('#000000');
-            // Course Name (Left aligned with padding)
             doc.text(c.title, rightStartX + 6, rowY + 4.5, { width: colW.course - 12, lineBreak: false });
-
-            // Credit Earned (Centered)
             doc.text(String(c.credits), rightStartX + colW.course, rowY + 4.5, { width: colW.credits, align: 'center' });
-
-            // Marks (Centered, blank if not completed)
             doc.text(c.marks, rightStartX + colW.course + colW.credits, rowY + 4.5, { width: colW.marks, align: 'center' });
-
-            // Grade (Centered, blank if not completed)
             doc.text(c.grade, rightStartX + colW.course + colW.credits + colW.marks, rowY + 4.5, { width: colW.grade, align: 'center' });
-
-            // Points (Centered, blank if not completed)
             doc.text(c.points, rightStartX + colW.course + colW.credits + colW.marks + colW.grade, rowY + 4.5, { width: colW.points, align: 'center' });
           }
 
@@ -328,11 +325,9 @@ export class TranscriptsService {
           startY = drawTableHeader(24);
         }
 
-        // Total box
         doc.lineWidth(0.75);
         doc.rect(startX, startY, totalW, totalRowHeight).stroke('#000000');
 
-        // Vertical dividers
         let curX = startX + colW.semester + colW.course;
         doc.moveTo(curX, startY).lineTo(curX, startY + totalRowHeight).stroke('#000000');
 
