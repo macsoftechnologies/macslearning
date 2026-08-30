@@ -193,4 +193,16 @@ export class DiscussionController {
       replyId,
     );
   }
+  // 7. Get members of a group thread
+  @Get('threads/:threadId/members')
+  async getThreadMembers(
+    @Request() req: any,
+    @Param('threadId') threadId: string,
+  ) {
+    return this.discussionService.getThreadMembers(
+      req.user.organizationId,
+      threadId,
+    );
+  }
+
 }

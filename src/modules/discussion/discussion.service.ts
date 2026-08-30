@@ -428,4 +428,51 @@ export class DiscussionService {
     }
     return reply;
   }
+  // Get all members of a group thread (Faculty, Admins & Enrolled Batch Students)
+  async getThreadMembers(organizationId: string, threadId: string) {
+    const thread = await this.threadRepository.findOne({ where: { id: threadId, organizationId, isDeleted: false } });
+    if (!thread) throw new NotFoundException('Thread not found');
+
+    const staff = await this.userRepository.find({
+      where: [
+        { organizationId, userType: 'ORG_USER', status: 'ACTIVE', isDeleted: false },
+        { organizationId, userType: 'FACULTY', status: 'ACTIVE', isDeleted: false },
+      ],
+    });
+
+    let students: any[] = [];
+    if (thread.batchId) {
+      const enrollments = await this.enrollmentRepository.find({
+        where: { organizationId, batchId: thread.batchId, status: 'ACTIVE' },
+      });
+      const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
+      if (studentIds.length > 0) {
+        students = await this.userRepository.find({
+          where: { id: In(studentIds), organizationId, status: 'ACTIVE', isDeleted: false },
+        });
+      }
+    } else {
+      students = await this.userRepository.find({
+        where: { organizationId, userType: 'STUDENT', status: 'ACTIVE', isDeleted: false },
+        take: 100,
+      });
+    }
+
+    const formatUser = (u: any) => ({
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      userType: u.userType,
+      photo: (u.customProfile as any)?.documents?.photo?.url || (u.customProfile as any)?.documents?.photo || null,
+    });
+
+    return {
+      batchId: thread.batchId,
+      threadTitle: thread.title,
+      totalCount: staff.length + students.length,
+      staff: staff.map(formatUser),
+      students: students.map(formatUser),
+    };
+  }
+
 }
