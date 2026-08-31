@@ -340,7 +340,8 @@ export class EnrollmentService {
       if (targetRange) {
         const startShort = targetRange.startMonth.substring(0,3);
         const endShort = targetRange.endMonth.substring(0,3);
-        const batchName = `${startShort}-${endShort} ${currentYear}${regionNameStr}`;
+        const progTag = program?.name ? ` (${program.name})` : '';
+        const batchName = `${startShort}-${endShort} ${currentYear}${regionNameStr}${progTag}`;
         
         let activeBatch = await this.batchRepository.findOne({
           where: { organizationId, programId, name: batchName }
