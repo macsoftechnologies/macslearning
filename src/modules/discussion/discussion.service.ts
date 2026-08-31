@@ -433,8 +433,10 @@ export class DiscussionService {
   }
 
   // Send a message into a thread
-  async addMessage(organizationId: string, threadId: string, authorId: string, content: string) {
-    if (!content || !content.trim()) throw new BadRequestException('Message content cannot be empty');
+  async addMessage(organizationId: string, threadId: string, authorId: string, content: any) {
+    const rawText = typeof content === 'object' && content !== null && content.content ? content.content : content;
+    const cleanContent = typeof rawText === 'string' ? rawText.trim() : String(rawText || '').trim();
+    if (!cleanContent) throw new BadRequestException('Message content cannot be empty');
 
     const thread = await this.threadRepository.findOne({
       where: { id: threadId, organizationId, isDeleted: false },
@@ -445,12 +447,12 @@ export class DiscussionService {
       organizationId,
       threadId,
       authorId,
-      content: content.trim(),
+      content: cleanContent,
     });
     const savedReply = await this.replyRepository.save(reply);
 
     thread.replyCount = (thread.replyCount || 0) + 1;
-    thread.lastMessage = content.trim();
+    thread.lastMessage = cleanContent;
     thread.lastMessageAt = new Date();
     await this.threadRepository.save(thread);
 
