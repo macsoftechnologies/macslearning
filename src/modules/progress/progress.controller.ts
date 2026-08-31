@@ -13,7 +13,7 @@ import { EnrollmentService } from '../enrollment/enrollment.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CompleteLessonDto } from './dto/progress.dto';
+import { CompleteLessonDto, UpdateWatchTimeDto } from './dto/progress.dto';
 
 @Controller('progress')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,8 +49,7 @@ export class ProgressController {
   async updateWatchTime(
     @Request() req: any,
     @Param('lessonId') lessonId: string,
-    @Body()
-    body: { courseId: string; moduleId: string; watchedSeconds: number },
+    @Body() body: UpdateWatchTimeDto,
   ) {
     if (req.user.userType === 'STUDENT') {
       await this.enrollmentService.verifyActiveEnrollment(
