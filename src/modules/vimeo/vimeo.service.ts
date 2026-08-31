@@ -214,7 +214,13 @@ export class VimeoService {
           size: String(fileSize),
         },
         name: videoName || 'Untitled Lesson Video',
-        privacy: { view: 'anybody', embed: 'public' },
+        privacy: { 
+          view: 'disable',     // Hides video from Vimeo.com public directory (Unlisted / Embedded only)
+          embed: 'public',     // Allows playing inside LMS embed player
+          download: false,     // Disables downloads on Vimeo
+          add: false,          // Disables adding to public collections
+          comments: 'nobody',  // Disables public comments
+        },
       };
 
       if (folderUri) {
