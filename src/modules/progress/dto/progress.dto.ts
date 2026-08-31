@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CompleteLessonDto {
   @IsString()
@@ -6,8 +6,8 @@ export class CompleteLessonDto {
   courseId: string;
 
   @IsString()
-  @IsNotEmpty()
-  moduleId: string;
+  @IsOptional()
+  moduleId?: string;
 }
 
 export class UpdateWatchTimeDto {
@@ -16,8 +16,8 @@ export class UpdateWatchTimeDto {
   courseId: string;
 
   @IsString()
-  @IsNotEmpty()
-  moduleId: string;
+  @IsOptional()
+  moduleId?: string;
 
   @IsNumber()
   @IsNotEmpty()
